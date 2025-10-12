@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Usuarios</h2>
+
+  <h3 style="margin-top:10px;">Crear nuevo usuario</h3>
+  <form method="post" action="{{ url_for('admin_users_create') }}" style="max-width:520px;">
+    {{ csrf_token() }}
+    <input type="text" name="name" placeholder="Nombre" required>
+    <input type="email" name="email" placeholder="Email" required>
+    <input type="password" name="password" placeholder="Contraseña" required>
+    <select name="role">
+      <option value="employee">Empleado</option>
+      <option value="admin">Admin</option>
+    </select>
+    <button class="btn" type="submit">Crear</button>
+  </form>
+
+  <h3 class="row">Listado</h3>
+  <table style="width:100%; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">ID</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Nombre</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Email</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Rol</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Creado</th>
+<th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Acciones</th>
+
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td style="padding:6px;">{{ u.id }}</td>
+        <td style="padding:6px;">{{ u.name }}</td>
+        <td style="padding:6px;">{{ u.email }}</td>
+        <td style="padding:6px;">{{ u.role.value }}</td>
+        <td style="padding:6px;">{{ (u.created_at or '').strftime("%d/%m/%Y %H:%M") if u.created_at else "—" }}</td>
+        <td style="padding:6px;">
+            <!-- Reset contraseña -->
+            <form method="post" action="{{ url_for('admin_users_reset_password', user_id=u.id) }}" style="display:inline-flex; gap:6px; align-items:center;">
+              <input type="password" name="new_password" placeholder="Nueva pass" style="padding:6px;border:1px solid #ccc;border-radius:6px; width:130px;" required>
+              <button class="btn" type="submit">Reset</button>
+            </form>
+          
+            <!-- Cambiar rol -->
+            <form method="post" action="{{ url_for('admin_users_set_role', user_id=u.id) }}" style="display:inline-flex; gap:6px; align-items:center; margin-left:8px;">
+                {{ csrf_token() }}
+                <select name="role" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
+                <option value="employee" {{ 'selected' if u.role.value=='employee' else '' }}>Empleado</option>
+                <option value="admin" {{ 'selected' if u.role.value=='admin' else '' }}>Admin</option>
+              </select>
+              <button class="btn" type="submit">Actualizar</button>
+            </form>
+          </td>
+          
+      </tr>
+      {% else %}
+      <tr><td colspan="5" style="padding:6px;">Sin usuarios</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

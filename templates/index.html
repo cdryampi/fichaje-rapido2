@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Fichaje</h2>
+
+  <form method="post" action="/logout">
+    {{ csrf_token() }}
+    <button class="btn" type="submit">Salir</button>
+  </form>
+
+  <div class="row">
+    <button class="btn"
+            hx-post="/clock"
+            hx-target="#resultado"
+            hx-swap="innerHTML">
+      {{ "Fichar salida" if dentro else "Fichar entrada" }}
+    </button>
+  </div>
+
+  <div id="resultado" class="row">
+    {% include "_status.html" with context %}
+  </div>
+</div>
+{% endblock %}

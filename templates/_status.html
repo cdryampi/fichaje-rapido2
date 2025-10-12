@@ -1,0 +1,17 @@
+<div class="{{ 'ok' if dentro else 'warn' }}">
+    <strong>Estado:</strong> {{ "DENTRO" if dentro else "FUERA" }}<br>
+    {% if mensaje %}<div style="margin-top:6px;">{{ mensaje|safe }}</div>{% endif %}
+  </div>
+  
+  <div style="margin-top:12px;">
+    <strong>Historial reciente:</strong>
+    <ul style="margin-top:6px;">
+        {% for r in historial %}
+          <li>{{ "Entrada" if r.action == 'in' else "Salida" }} — {{ r.ts_local }}</li>
+        {% else %}
+          <li>Sin registros aún.</li>
+        {% endfor %}
+      </ul>
+      
+  </div>
+  

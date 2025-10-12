@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Entrar</h2>
+  <form method="post">
+    {{ csrf_token() }}
+    <input type="email" name="email" placeholder="email" required value="demo@demo.local">
+    <input type="password" name="password" placeholder="contraseña" required value="demo1234">
+    <button class="btn" type="submit">Acceder</button>
+  </form>
+  <p class="muted">Usuario demo creado al arrancar.</p>
+</div>
+{% endblock %}
