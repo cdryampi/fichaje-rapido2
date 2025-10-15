@@ -73,7 +73,8 @@ with app.app_context():
 def inject_template_globals():
     return {
         "current_year": datetime.now(TZ).year,
-        "owner_name": "Yampi",
+        # Nombre del propietario/empresa configurable por entorno
+        "owner_name": os.environ.get("OWNER_NAME", "Fichaje Rápido"),
     }
 
 
