@@ -166,25 +166,37 @@ def init_db_with_demo():
     # 3. Crear datos de demostración si NO existen
     db = SessionLocal()
     try:
-        # Verificar si ya hay datos (checking por usuario admin)
+        # IMPORTANTE: Verificar DENTRO de una transacción para evitar race conditions
         existing_admin = db.execute(
             select(User).where(User.email == "admin@demo.local")
         ).scalar_one_or_none()
         
         if existing_admin:
-            print("✓ Base de datos ya inicializada con datos de demostración")
+            print("✓ Base de datos ya inicializada")
+            db.close()
             return
         
-        # Verificar si hay áreas existentes
+        # Intentar obtener o crear el área (manejo de race condition)
         existing_area = db.execute(
             select(Area).where(Area.name == "Area Demo")
         ).scalar_one_or_none()
         
         if existing_area:
-            print("✓ Área demo ya existe, omitiendo creación de datos")
+            # Otro worker ya creó el área, verificamos si completó todo
+            print("✓ Área demo ya existe, verificando usuarios...")
+            existing_admin_check = db.execute(
+                select(User).where(User.email == "admin@demo.local")
+            ).scalar_one_or_none()
+            if existing_admin_check:
+                print("✓ Datos de demostración ya completos")
+                db.close()
+                return
+            # Si el área existe pero no el admin, puede ser race condition, salimos
+            print("⚠ Otro worker está inicializando, saliendo...")
+            db.close()
             return
         
-        # Si llegamos aquí, no hay datos demo, los creamos
+        # Si llegamos aquí, somos el primer worker, creamos todo
         print("Creando datos de demostración...")
         
         # Crear área
@@ -212,47 +224,40 @@ def init_db_with_demo():
         
         created_users = []
         for email, name, role, group in users_to_create:
-            # Verificar que no exista
-            existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
-            if not existing:
-                u = User(
-                    email=email,
-                    name=name,
-                    role=role,
-                    area=area,
-                    group=group,
-                    is_active=True
-                )
-                u.set_password("demo1234")
-                db.add(u)
-                created_users.append(u)
-        
-        # Crear invitado (sin grupo)
-        guest_existing = db.execute(select(User).where(User.email == "guest@demo.local")).scalar_one_or_none()
-        if not guest_existing:
-            guest = User(
-                email="guest@demo.local",
-                name="Invitado",
-                role=Role.invitado,
+            u = User(
+                email=email,
+                name=name,
+                role=role,
+                area=area,
+                group=group,
                 is_active=True
             )
-            guest.set_password("demo1234")
-            db.add(guest)
-            created_users.append(guest)
+            u.set_password("demo1234")
+            db.add(u)
+            created_users.append(u)
+        
+        # Crear invitado (sin grupo)
+        guest = User(
+            email="guest@demo.local",
+            name="Invitado",
+            role=Role.invitado,
+            is_active=True
+        )
+        guest.set_password("demo1234")
+        db.add(guest)
+        created_users.append(guest)
         
         db.flush()
         
         # Crear accesos para invitado
-        if not guest_existing and len(created_users) >= 3:
-            guest_user = next((u for u in created_users if u.email == "guest@demo.local"), None)
-            emp1_user = next((u for u in created_users if u.email == "emp1@demo.local"), None)
-            emp2_user = next((u for u in created_users if u.email == "emp2@demo.local"), None)
-            
-            if guest_user and emp1_user and emp2_user:
-                db.add_all([
-                    GuestAccess(guest_user_id=guest_user.id, target_user_id=emp1_user.id),
-                    GuestAccess(guest_user_id=guest_user.id, target_user_id=emp2_user.id),
-                ])
+        guest_user = created_users[-1]
+        emp1_user = created_users[4]  # emp1@demo.local
+        emp2_user = created_users[5]  # emp2@demo.local
+        
+        db.add_all([
+            GuestAccess(guest_user_id=guest_user.id, target_user_id=emp1_user.id),
+            GuestAccess(guest_user_id=guest_user.id, target_user_id=emp2_user.id),
+        ])
         
         db.commit()
         print(f"✓ Base de datos inicializada con {len(created_users)} usuarios de demostración")
@@ -260,7 +265,10 @@ def init_db_with_demo():
         
     except Exception as e:
         db.rollback()
-        print(f"✗ Error al crear datos de demostración: {e}")
-        # No re-lanzamos el error, permitimos que la app continúe
+        # Si falla por UNIQUE constraint, es porque otro worker ganó la carrera
+        if "UNIQUE constraint failed" in str(e):
+            print("⚠ Otro worker ya inicializó la BD (race condition detectada)")
+        else:
+            print(f"✗ Error al crear datos de demostración: {e}")
     finally:
         db.close()
