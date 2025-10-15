@@ -1,0 +1,53 @@
+<div>
+  <div class="center">
+  <button class="btn btn-hero {{ 'btn-green' if pausa_activa else 'btn-yellow' }}"
+          hx-post="/pause"
+          hx-target="#pausa"
+          hx-swap="innerHTML">
+    {% if pausa_activa %}
+      <i data-lucide="play-circle" class="icon"></i> Reanudar
+    {% else %}
+      <i data-lucide="pause-circle" class="icon"></i> Registrar PAUSA
+    {% endif %}
+  </button>
+  </div>
+  {% if pausa_activa %}
+    <span style="margin-left:12px;" class="muted">Tiempo en pausa:
+      <span id="pause-timer"
+            data-start-epoch="{{ pausa_start_epoch }}"
+            data-server-epoch="{{ server_now_utc or 0 }}">00:00:00</span>
+    </span>
+    <script>
+      (function(){
+        var el = document.getElementById('pause-timer');
+        if(!el) return;
+        var startMs = parseFloat(el.dataset.startEpoch) * 1000;
+        var serverMs = parseFloat(el.dataset.serverEpoch) * 1000;
+        var offset = serverMs - Date.now();
+        function fmt(sec){
+          sec = Math.max(0, Math.floor(sec));
+          var h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+          return (h<10?'0':'')+h+':' + (m<10?'0':'')+m+':' + (s<10?'0':'')+s;
+        }
+        function tick(){
+          var now = Date.now() + offset;
+          var secs = (now - startMs)/1000;
+          el.textContent = fmt(secs);
+        }
+        tick();
+        var iv = setInterval(tick, 1000);
+      })();
+    </script>
+  {% endif %}
+  {% if mensaje_pause %}
+    <div class="row"><div class="ok">{{ mensaje_pause }}</div></div>
+    {% if pause_total_today_fmt %}
+    <script>
+      (function(){
+        var el = document.getElementById('pausa-total-value');
+        if(el){ el.textContent = {{ ('"'+pause_total_today_fmt+'"')|safe }}; }
+      })();
+    </script>
+    {% endif %}
+  {% endif %}
+</div>

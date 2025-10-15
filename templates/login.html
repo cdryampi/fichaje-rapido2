@@ -3,11 +3,26 @@
 <div class="card">
   <h2>Entrar</h2>
   <form method="post">
-    {{ csrf_token() }}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="email" name="email" placeholder="email" required value="demo@demo.local">
     <input type="password" name="password" placeholder="contraseña" required value="demo1234">
     <button class="btn" type="submit">Acceder</button>
   </form>
   <p class="muted">Usuario demo creado al arrancar.</p>
 </div>
+{% if show_dev_login %}
+<div class="card" style="margin-top:12px;">
+  <h3 style="margin:0 0 8px 0;">Acceso rápido (demo)</h3>
+  <form method="post" action="{{ url_for('dev_login_as') }}" style="display:flex; gap:8px; align-items:center;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <select name="user_id" style="padding:10px;border:1px solid #ccc;border-radius:8px;">
+      {% for u in test_users %}
+        <option value="{{ u.id }}">{{ u.role.value }} — {{ u.email }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">Entrar como</button>
+  </form>
+  <p class="muted">Solo visible en modo debug o con ALLOW_LOGIN_AS=1.</p>
+</div>
+{% endif %}
 {% endblock %}

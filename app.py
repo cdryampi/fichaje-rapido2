@@ -657,6 +657,35 @@ def requests_page():
     return render_template("requests.html")
 
 
+@app.route("/requests/adelanto", methods=["GET", "POST"])
+@login_required
+def advance_request():
+    if request.method == "POST":
+        income_raw = (request.form.get("annual_income") or "").strip()
+        # Sanitizar entrada: permitir "," o "." como separadores
+        income_sanitized = income_raw.replace(" ", "").replace(",", ".")
+        try:
+            income_val = float(income_sanitized)
+        except Exception:
+            income_val = None
+
+        # Nota: archivos no se guardan en esta demo
+        # Validación de ingresos
+        if income_val is None:
+            flash("Introduce un ingreso anual válido.", "error")
+            return render_template("advance.html", annual_income=income_raw)
+
+        if income_val < 10000:
+            # Mostrar popup con el mensaje solicitado y permanecer en la página
+            popup_message = "NOOOO con estos ingresos no te podemos adelantear."
+            return render_template("advance.html", annual_income=income_raw, popup_message=popup_message)
+
+        flash("Solicitud de adelanto enviada (demo).", "ok")
+        return redirect(url_for("requests_page"))
+
+    return render_template("advance.html")
+
+
 @app.route("/info")
 @login_required
 def info_page():

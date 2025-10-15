@@ -1,11 +1,28 @@
 <div class="{{ 'ok' if dentro else 'warn' }}">
-    <strong>Estado:</strong> {{ "DENTRO" if dentro else "FUERA" }}<br>
+    <strong>Estado:</strong> {{ "DENTRO" if dentro else "FUERA" }}
     {% if mensaje %}<div style="margin-top:6px;">{{ mensaje|safe }}</div>{% endif %}
   </div>
   
-  <div style="margin-top:12px;">
-    <strong>Historial reciente:</strong>
-    <ul style="margin-top:6px;">
+<script>
+  (function(){
+    var inBtn = document.getElementById('btn-in');
+    var outBtn = document.getElementById('btn-out');
+    if (!inBtn || !outBtn) return;
+    var dentro = {{ 'true' if dentro else 'false' }};
+    if (dentro) {
+      inBtn.classList.add('btn-dim');
+      outBtn.classList.remove('btn-dim');
+    } else {
+      inBtn.classList.remove('btn-dim');
+      outBtn.classList.add('btn-dim');
+    }
+  })();
+  if (window.lucide && window.lucide.createIcons) { window.lucide.createIcons(); }
+</script>
+
+  <div class="row">
+    <div class="section-title">Historial reciente</div>
+    <ul class="hist">
         {% for r in historial %}
           <li>{{ "Entrada" if r.action == 'in' else "Salida" }} — {{ r.ts_local }}</li>
         {% else %}

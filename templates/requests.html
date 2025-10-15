@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Solicitudes</h2>
+  <div class="row">
+    <a class="btn btn-green" href="{{ url_for('advance_request') }}">Adelanto</a>
+  </div>
+  <div class="row">
+    <div style="display:flex;flex-direction:column;gap:10px;width:100%">
+      <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #eee;border-radius:8px;padding:10px 12px;">
+        <div style="display:flex;gap:8px;align-items:center;"><i data-lucide="plane" class="icon"></i> Solicitud de ausencia</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          {% if current_user.role.value == 'admin' %}
+          <button class="btn btn-small btn-red" type="button" onclick="document.getElementById('modal-absence-admin').showModal()">Editar</button>
+          {% endif %}
+          <button class="btn btn-small btn-green" type="button" onclick="document.getElementById('modal-absence').showModal()">Crear solicitud</button>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #eee;border-radius:8px;padding:10px 12px;">
+        <div style="display:flex;gap:8px;align-items:center;"><i data-lucide="wallet" class="icon"></i> Solicitud de adelanto de nómina</div>
+        <button class="btn btn-small" type="button" disabled>Próximamente</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Solicitud de Ausencia (Demo) -->
+<dialog id="modal-absence" class="modal">
+  <div class="modal-header">
+    <div>Solicitud de ausencia (demo)</div>
+    <button class="btn btn-small" type="button" onclick="document.getElementById('modal-absence').close()">Cerrar</button>
+  </div>
+  <div class="modal-body">
+    <form id="form-absence" onsubmit="event.preventDefault();">
+      <div class="row inline">
+        <label style="min-width:110px;">Tipo</label>
+        <select id="abs-type" class="input-sm"></select>
+        <select id="abs-subtype" class="input-sm"></select>
+      </div>
+
+      <div id="grp-full" class="row inline">
+        <label style="min-width:110px;">Días completos</label>
+        <input id="abs-full-days" type="checkbox" class="input-sm" checked>
+      </div>
+
+      <!-- Rango de fechas (días completos) -->
+      <div id="grp-range" class="row inline">
+        <label style="min-width:110px;">Desde</label>
+        <input id="abs-from" class="input-sm" type="date">
+        <label style="min-width:60px;">Hasta</label>
+        <input id="abs-to" class="input-sm" type="date">
+      </div>
+
+      <!-- Día + horas (parciales) -->
+      <div id="grp-partial" class="row" style="display:none;">
+        <div class="inline" style="margin-bottom:8px;">
+          <label style="min-width:110px;">Día</label>
+          <input id="abs-day" class="input-sm" type="date">
+        </div>
+        <div class="inline">
+          <label style="min-width:110px;">Hora salida</label>
+          <input id="abs-time-from" class="input-sm w-120" type="time">
+          <label style="min-width:110px;">Hora vuelta</label>
+          <input id="abs-time-to" class="input-sm w-120" type="time">
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Adjuntar archivos</label>
+        <input type="file" multiple>
+      </div>
+
+      <div class="row">
+        <label>Comentarios</label>
+        <textarea rows="3" maxlength="500" placeholder="Breve explicación (opcional)" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px"></textarea>
+      </div>
+      <div id="abs-error" class="warn" style="display:none; margin-top:8px;">Corrige los campos resaltados.</div>
+    </form>
+  </div>
+  <div class="modal-actions">
+    <button class="btn btn-small btn-outline" type="button" onclick="document.getElementById('modal-absence').close()">Cancelar</button>
+    <button id="btn-absence-submit" class="btn btn-small btn-green" type="submit" form="form-absence" disabled>Enviar (demo)</button>
+  </div>
+</dialog>
+
+<script>
+  (function(){
+    var typeSel = document.getElementById('abs-type');
+    var subSel = document.getElementById('abs-subtype');
+    var fullChk = document.getElementById('abs-full-days');
+    var grpFull = document.getElementById('grp-full');
+    var grpRange = document.getElementById('grp-range');
+    var grpPartial = document.getElementById('grp-partial');
+    var fromEl = document.getElementById('abs-from');
+    var toEl = document.getElementById('abs-to');
+    var dayEl = document.getElementById('abs-day');
+    var tFromEl = document.getElementById('abs-time-from');
+    var tToEl = document.getElementById('abs-time-to');
+    var errBox = document.getElementById('abs-error');
+    var submitBtn = document.getElementById('btn-absence-submit');
+
+    // Config por defecto de tipos/subtipos con modo: 'full' (días) o 'hours' (parciales)
+    var defaultConfig = {
+      tipos: [
+        { key:'vacaciones', nombre:'Vacaciones', subtipos:[
+          {key:'vacaciones', nombre:'Vacaciones', modo:'full'},
+          {key:'dias_adicionales', nombre:'Días adicionales / convenio', modo:'full'},
+          {key:'dias_libre', nombre:'Días libre elección', modo:'full'}]},
+        { key:'permisos', nombre:'Permisos retribuidos', subtipos:[
+          {key:'matrimonio', nombre:'Matrimonio', modo:'full'},
+          {key:'nacimiento', nombre:'Nacimiento/Adopción/Acogida', modo:'full'},
+          {key:'fallecimiento', nombre:'Fallecimiento', modo:'full'},
+          {key:'mudanza', nombre:'Mudanza', modo:'full'}]},
+        { key:'compensacion', nombre:'Compensación de horas', subtipos:[
+          {key:'por_horas', nombre:'Por horas', modo:'hours'}]},
+        { key:'medico', nombre:'Médico', subtipos:[
+          {key:'baja', nombre:'Baja médica', modo:'full'},
+          {key:'cita', nombre:'Cita médica', modo:'hours'}]},
+        { key:'otros', nombre:'Otros', subtipos:[
+          {key:'otros', nombre:'Otros', modo:'full'}]}
+      ]
+    };
+
+    function loadAbsenceConfig(){
+      try{
+        var raw = localStorage.getItem('absence_types_config');
+        if(!raw) return JSON.parse(JSON.stringify(defaultConfig));
+        var cfg = JSON.parse(raw);
+        if(!cfg || !cfg.tipos) return JSON.parse(JSON.stringify(defaultConfig));
+        return cfg;
+      }catch(e){ return JSON.parse(JSON.stringify(defaultConfig)); }
+    }
+    function saveAbsenceConfig(cfg){ try{ localStorage.setItem('absence_types_config', JSON.stringify(cfg)); }catch(e){} }
+
+    var config = loadAbsenceConfig();
+
+    function fillTypes(){
+      var sel = document.getElementById('abs-type');
+      if(!sel) return;
+      sel.innerHTML = '';
+      config.tipos.forEach(function(t){
+        var o = document.createElement('option'); o.value = t.key; o.textContent = t.nombre; sel.appendChild(o);
+      });
+    }
+
+    function findType(key){ return (config.tipos || []).find(function(t){return t.key===key}); }
+    function findSubtype(tkey, skey){ var t=findType(tkey); if(!t) return null; return (t.subtipos||[]).find(function(s){return s.key===skey}); }
+
+    function fillSub(){
+      var k = typeSel.value;
+      var t = findType(k);
+      var opts = (t && t.subtipos) ? t.subtipos : [];
+      subSel.innerHTML = '';
+      opts.forEach(function(o){
+        var el = document.createElement('option'); el.value=o.key; el.textContent=o.nombre; el.setAttribute('data-modo', o.modo||'full'); subSel.appendChild(el);
+      });
+    }
+
+    function updateVisibility(){
+      var k = typeSel.value;
+      var s = subSel.value;
+      // Forzar según configuración del subtipo
+      var st = findSubtype(k, s);
+      var modo = st ? (st.modo||'full') : 'full';
+      // Mostrar el control del checkbox salvo que el modo esté forzado explícitamente
+      grpFull.style.display = '';
+      if (modo==='full'){ fullChk.checked = true; fullChk.disabled = true; }
+      else if (modo==='hours'){ fullChk.checked = false; fullChk.disabled = true; }
+      else { fullChk.disabled = false; }
+      var useFull = fullChk.checked;
+      grpRange.style.display = useFull ? '' : 'none';
+      grpPartial.style.display = useFull ? 'none' : '';
+      validate(false);
+    }
+
+    typeSel && typeSel.addEventListener('change', function(){ fillSub(); updateVisibility(); });
+    subSel && subSel.addEventListener('change', updateVisibility);
+    fullChk && fullChk.addEventListener('change', function(){
+      var on = !!fullChk.checked;
+      grpRange.style.display = on ? '' : 'none';
+      grpPartial.style.display = on ? 'none' : '';
+    });
+
+    // Inicializa al abrir modal
+    document.getElementById('modal-absence').addEventListener('close', function(){});
+    // Setup inicial
+    if(typeSel){ fillTypes(); fillSub(); updateVisibility(); }
+    // React to admin updates
+    window.addEventListener('absence-config-updated', function(){
+      config = loadAbsenceConfig();
+      fillTypes(); fillSub(); updateVisibility();
+    });
+
+    // Prefijar hoy por comodidad
+    function todayYMD(){ var d=new Date(); var y=d.getFullYear(); var m=('0'+(d.getMonth()+1)).slice(-2); var dd=('0'+d.getDate()).slice(-2); return y+'-'+m+'-'+dd }
+    if(fromEl && !fromEl.value){ fromEl.value = todayYMD(); }
+    if(dayEl && !dayEl.value){ dayEl.value = todayYMD(); }
+
+    // Validación ligera (demo) con destacado de campos e inhibición de submit
+    function setInvalid(el, invalid){ if(!el) return; el.classList.toggle('is-invalid', !!invalid); }
+
+    function validate(showMsg){
+      errBox.style.display = 'none';
+      var errors = [];
+      var k = typeSel.value;
+      var s = subSel.value;
+      var useFull = fullChk.checked && k !== 'compensacion';
+
+      // Limpia estados
+      [fromEl,toEl,dayEl,tFromEl,tToEl].forEach(function(e){ setInvalid(e,false) });
+
+      function pushErr(msg, el){ if(errors.indexOf(msg)===-1) errors.push(msg); setInvalid(el,true); }
+
+      if(useFull){
+        if(!fromEl.value){ pushErr('Selecciona la fecha inicial.', fromEl); }
+        if(!toEl.value){ pushErr('Selecciona la fecha final.', toEl); }
+        if(fromEl.value && toEl.value && fromEl.value > toEl.value){ pushErr('La fecha final debe ser posterior o igual a la inicial.', toEl); }
+      } else {
+        if(!dayEl.value){ pushErr('Selecciona el día.', dayEl); }
+        if(!tFromEl.value){ pushErr('Indica hora de salida.', tFromEl); }
+        if(!tToEl.value){ pushErr('Indica hora de vuelta.', tToEl); }
+        if(tFromEl.value && tToEl.value && tFromEl.value >= tToEl.value){ pushErr('La hora de vuelta debe ser posterior a la de salida.', tToEl); }
+      }
+
+      var ok = errors.length===0;
+      if(submitBtn) submitBtn.disabled = !ok;
+      if(!ok && showMsg){ errBox.textContent = errors.join(' '); errBox.style.display=''; }
+      return ok;
+    }
+
+    ['change','input'].forEach(function(evt){
+      [typeSel,subSel,fullChk,fromEl,toEl,dayEl,tFromEl,tToEl].forEach(function(el){ if(el) el.addEventListener(evt, function(){ validate(false); }); });
+    });
+
+    // Inicial valid
+    validate(false);
+
+    document.getElementById('form-absence').addEventListener('submit', function(){
+      if(!validate(true)) return;
+      alert('Demostración: solicitud preparada para enviar a validación.');
+      document.getElementById('modal-absence').close();
+    });
+  })();
+</script>
+
+{% if current_user.role.value == 'admin' %}
+<!-- Modal Admin: gestionar tipos/subtipos de ausencia (demo) -->
+<dialog id="modal-absence-admin" class="modal">
+  <div class="modal-header">
+    <div>Configurar tipos de ausencia (demo)</div>
+    <button class="btn btn-small" type="button" onclick="document.getElementById('modal-absence-admin').close()">Cerrar</button>
+  </div>
+  <div class="modal-body">
+    <div class="row inline" style="gap:8px; flex-wrap:wrap;">
+      <label>Tipo</label>
+      <select id="adm-type" class="input-sm" onchange="AbsAdmin.onTypeChange()"></select>
+      <input id="admin-type-name" class="input-sm" placeholder="Nuevo nombre tipo">
+      <button class="btn btn-small" type="button" onclick="AbsAdmin.addTypeFromInput()">Añadir tipo</button>
+      <button class="btn btn-small" type="button" onclick="AbsAdmin.renameType()">Renombrar</button>
+      <button class="btn btn-small btn-red" type="button" onclick="AbsAdmin.deleteType()">Borrar tipo</button>
+    </div>
+    <div class="row inline" style="gap:8px; flex-wrap:wrap;">
+      <label>Subtipo</label>
+      <select id="adm-subtype" class="input-sm"></select>
+      <input id="admin-sub-name" class="input-sm" placeholder="Nuevo nombre subtipo" style="min-width:220px;">
+      <label class="inline" style="gap:4px;"><input type="radio" name="admin-sub-mode" value="full" checked> Días completos</label>
+      <label class="inline" style="gap:4px;"><input type="radio" name="admin-sub-mode" value="hours"> Por horas</label>
+      <button class="btn btn-small" type="button" onclick="AbsAdmin.addSubtype()">Añadir subtipo</button>
+      <button class="btn btn-small" type="button" onclick="AbsAdmin.renameSubtype()">Renombrar</button>
+      <button class="btn btn-small" type="button" onclick="AbsAdmin.toggleMode()">Cambiar modo</button>
+      <button class="btn btn-small btn-red" type="button" onclick="AbsAdmin.deleteSubtype()">Borrar subtipo</button>
+    </div>
+  </div>
+  <div class="modal-actions">
+    <button class="btn btn-small btn-outline" type="button" onclick="document.getElementById('modal-absence-admin').close()">Cerrar</button>
+  </div>
+</dialog>
+
+<script>
+  // Admin config demo: guarda en localStorage y refresca selects del modal principal
+  (function(){
+    var cfg = null, typesEl, subsEl;
+    var defaultConfigAdmin = {
+      tipos: [
+        { key:'vacaciones', nombre:'Vacaciones', subtipos:[
+          {key:'vacaciones', nombre:'Vacaciones', modo:'full'},
+          {key:'dias_adicionales', nombre:'Días adicionales / convenio', modo:'full'},
+          {key:'dias_libre', nombre:'Días libre elección', modo:'full'}]},
+        { key:'permisos', nombre:'Permisos retribuidos', subtipos:[
+          {key:'matrimonio', nombre:'Matrimonio', modo:'full'},
+          {key:'nacimiento', nombre:'Nacimiento/Adopción/Acogida', modo:'full'},
+          {key:'fallecimiento', nombre:'Fallecimiento', modo:'full'},
+          {key:'mudanza', nombre:'Mudanza', modo:'full'}]},
+        { key:'compensacion', nombre:'Compensación de horas', subtipos:[
+          {key:'por_horas', nombre:'Por horas', modo:'hours'}]},
+        { key:'medico', nombre:'Médico', subtipos:[
+          {key:'baja', nombre:'Baja médica', modo:'full'},
+          {key:'cita', nombre:'Cita médica', modo:'hours'}]},
+        { key:'otros', nombre:'Otros', subtipos:[
+          {key:'otros', nombre:'Otros', modo:'full'}]}
+      ]
+    };
+    function load(){ try{ var raw=localStorage.getItem('absence_types_config'); cfg = raw? JSON.parse(raw): null; }catch(e){ cfg=null } if(!cfg){ cfg = defaultConfigAdmin } }
+    function save(){ try{ localStorage.setItem('absence_types_config', JSON.stringify(cfg)); }catch(e){} }
+    function render(){
+      var typeSel = document.getElementById('adm-type');
+      var subSel = document.getElementById('adm-subtype');
+      typeSel.innerHTML='';
+      (cfg.tipos||[]).forEach(function(t,idx){
+        var o=document.createElement('option'); o.value=idx; o.textContent=t.nombre+' ('+t.key+')'; typeSel.appendChild(o);
+      });
+      if(AbsAdmin.sel==null && (cfg.tipos||[]).length>0) AbsAdmin.sel=0;
+      if(AbsAdmin.sel!=null) typeSel.value=AbsAdmin.sel;
+      // subtypes
+      subSel.innerHTML='';
+      if(AbsAdmin.sel!=null){
+        (cfg.tipos[AbsAdmin.sel].subtipos||[]).forEach(function(s,si){
+          var o=document.createElement('option'); o.value=si; o.textContent=s.nombre+' ('+s.key+') — '+(s.modo==='hours'?'Por horas':'Días completos'); subSel.appendChild(o);
+        });
+      }
+    }
+    window.AbsAdmin = {
+      sel:null,
+      open:function(){ load(); render(); },
+      onTypeChange:function(){ var typeSel=document.getElementById('adm-type'); AbsAdmin.sel = parseInt(typeSel.value,10); render(); },
+      addTypeFromInput:function(){ var name=document.getElementById('admin-type-name').value.trim(); if(!name) return; var key=name.toLowerCase().replace(/[^a-z0-9]+/g,'_'); (cfg.tipos||[]).push({key:key,nombre:name,subtipos:[]}); document.getElementById('admin-type-name').value=''; save(); render(); window.dispatchEvent(new CustomEvent('absence-config-updated')); },
+      renameType:function(){ if(AbsAdmin.sel==null) return; var name=prompt('Nuevo nombre', cfg.tipos[AbsAdmin.sel].nombre); if(!name) return; cfg.tipos[AbsAdmin.sel].nombre=name; save(); render(); window.dispatchEvent(new CustomEvent('absence-config-updated')); },
+      deleteType:function(){ if(AbsAdmin.sel==null) return; if(!confirm('¿Borrar tipo?')) return; cfg.tipos.splice(AbsAdmin.sel,1); AbsAdmin.sel=null; save(); render(); window.dispatchEvent(new CustomEvent('absence-config-updated')); },
+      addSubtype:function(){ if(AbsAdmin.sel==null) return alert('Selecciona un tipo'); var t=cfg.tipos[AbsAdmin.sel]; var name=document.getElementById('admin-sub-name').value.trim(); if(!name) return; var mode=document.querySelector('input[name="admin-sub-mode"]:checked').value; var key=name.toLowerCase().replace(/[^a-z0-9]+/g,'_'); (t.subtipos=t.subtipos||[]).push({key:key,nombre:name,modo:mode}); document.getElementById('admin-sub-name').value=''; save(); render(); window.dispatchEvent(new CustomEvent('absence-config-updated')); },
+      renameSubtype:function(){ if(AbsAdmin.sel==null) return; var subSel=document.getElementById('adm-subtype'); var si=parseInt(subSel.value,10); if(isNaN(si)) return; var t=cfg.tipos[AbsAdmin.sel]; var name=prompt('Nuevo nombre', t.subtipos[si].nombre); if(!name) return; t.subtipos[si].nombre=name; save(); render(); window.dispatchEvent(new CustomEvent('absence-config-updated')); },
+      toggleMode:function(){ if(AbsAdmin.sel==null) return; var subSel=document.getElementById('adm-subtype'); var si=parseInt(subSel.value,10); if(isNaN(si)) return; var t=cfg.tipos[AbsAdmin.sel]; t.subtipos[si].modo = (t.subtipos[si].modo==='hours'?'full':'hours'); save(); render(); window.dispatchEvent(new CustomEvent('absence-config-updated')); },
+      deleteSubtype:function(){ if(AbsAdmin.sel==null) return; var subSel=document.getElementById('adm-subtype'); var si=parseInt(subSel.value,10); if(isNaN(si)) return; var t=cfg.tipos[AbsAdmin.sel]; if(!confirm('¿Borrar subtipo?')) return; t.subtipos.splice(si,1); save(); render(); window.dispatchEvent(new CustomEvent('absence-config-updated')); }
+    };
+    document.getElementById('modal-absence-admin').addEventListener('show', function(){ AbsAdmin.open() });
+    // Render al abrir
+    document.getElementById('modal-absence-admin').addEventListener('click', function(e){ /* noop, ensure dialog exists */ });
+    // Inicial refs
+    typesEl = document.getElementById('admin-types');
+    subsEl = document.getElementById('admin-subtypes');
+    // Render inicial si se abre por primera vez
+    document.getElementById('modal-absence-admin').addEventListener('close', function(){ /* no-op */ });
+    // Hook botón Editar para precargar
+    var editBtn = document.querySelector('button.btn-red[onclick*="modal-absence-admin"]');
+    if(editBtn){ editBtn.addEventListener('click', function(){ load(); AbsAdmin.open(); }); }
+  })();
+</script>
+{% endif %}
+{% endblock %}

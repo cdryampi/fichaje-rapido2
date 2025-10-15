@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Mi perfil</h2>
+  <form method="post" style="max-width:520px; display:flex; flex-direction:column; gap:10px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Nombre</label>
+    <input type="text" name="name" value="{{ user.name }}" {{ '' if current_user.role.value=='admin' else 'readonly' }}>
+    <label>Email</label>
+    <input type="email" name="email" value="{{ user.email }}" {{ '' if current_user.role.value=='admin' else 'readonly' }}>
+    {% if current_user.role.value == 'admin' %}
+      <div>
+        <button class="btn btn-green" type="submit">Guardar</button>
+      </div>
+    {% else %}
+      <div class="muted">Solo lectura. Contacta con un administrador para cambios.</div>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}
+

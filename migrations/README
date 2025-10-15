@@ -1,0 +1,3 @@
+Auto-generated minimal Alembic environment for Flask-Migrate-like usage.
+Run: flask db upgrade (after installing Flask-Migrate) to apply.
+

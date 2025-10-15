@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Información de marcajes de tiempo</h2>
+  <p class="muted">Demostración: jornada esperada Lun–Vie 07:30, fines de semana 00:00.</p>
+
+  <div>
+    {% for m in months %}
+      <div style="border:1px solid #eee;border-radius:10px;margin-top:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;" onclick="var el=document.getElementById('mon-{{ m.month }}'); el.style.display = (el.style.display==='none'?'':'none');">
+          <div><strong>{{ m.name }}</strong></div>
+          <div class="muted">Trabajado {{ m.month_worked_hm }} · Esperado {{ m.month_expected_hm }} · Balance {{ m.month_balance_hm }}</div>
+        </div>
+        <div id="mon-{{ m.month }}" style="display: {{ '' if m.month == current_month else 'none' }}; padding: 0 12px 10px 12px;">
+          <table style="width:100%; border-collapse: collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Día</th>
+                <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Entradas/Salidas</th>
+                <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Trabajado</th>
+                <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Esperado</th>
+                <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in m.daily %}
+              <tr>
+                <td style="padding:6px;">{{ d.date }}</td>
+                <td style="padding:6px;">{{ ', '.join(d.pairs) if d.pairs else '—' }}</td>
+                <td style="padding:6px;">{{ d.worked_hm }}</td>
+                <td style="padding:6px;">{{ d.expected_hm }}</td>
+                <td style="padding:6px;">{{ d.balance_hm }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+

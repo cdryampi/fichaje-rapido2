@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Mis documentos</h2>
+  <p class="muted">Aquí encontrarás los documentos subidos por RRHH (demo).</p>
+
+  <div style="display:flex; flex-direction:column; gap:12px;">
+    {% for cat in categories %}
+    <div style="border:1px solid #eee;border-radius:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;" onclick="var el=document.getElementById('cat-{{ cat.key }}'); el.style.display = (el.style.display==='none'?'':'none');">
+        <div><strong>{{ cat.name }}</strong></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="muted">{{ ((cat['items'] or [])|length) }} documentos</div>
+          {% if cat.key == 'payrolls' %}
+            <a href="{{ url_for('requests_page') }}" class="btn btn-small btn-green" style="opacity:.95;" onclick="event.stopPropagation();">Adelanto nómina</a>
+          {% endif %}
+        </div>
+      </div>
+      <div id="cat-{{ cat.key }}" style="padding:0 12px 10px 12px;">
+        {% if cat['items'] and (cat['items']|length) > 0 %}
+          <ul class="hist" style="margin-top:6px;">
+          {% for doc in cat['items'] %}
+            <li>
+              <i data-lucide="file" class="icon"></i>
+              <a href="#" style="text-decoration:none;">{{ doc.title or 'Documento' }}</a>
+              <span class="muted" style="margin-left:auto;">{{ doc.date or '' }}</span>
+            </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          <div class="muted" style="padding:8px 0;">Aún no hay documentos en esta categoría.</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

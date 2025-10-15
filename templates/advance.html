@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="header">
+    <h2 style="margin:0;">Solicitud de adelanto de nómina</h2>
+    <div class="actions-right">
+      <a class="btn btn-small" href="{{ url_for('requests_page') }}">Volver</a>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" onsubmit="return validateAdvance(event)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="row">
+      <label>Sube tus 3 últimas nóminas</label>
+      <div class="inline" style="gap:8px;flex-wrap:wrap;">
+        <input type="file" name="payslip1" required>
+        <input type="file" name="payslip2" required>
+        <input type="file" name="payslip3" required>
+      </div>
+    </div>
+
+    <div class="row inline">
+      <label>Ingreso anual (€)</label>
+      <input id="annual-income" class="input-sm w-120" name="annual_income" type="number" min="0" step="0.01" placeholder="0.00" value="{{ annual_income or '' }}" required>
+    </div>
+
+    <div class="row">
+      <button class="btn btn-green" type="submit">Poner petición</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  function validateAdvance(evt){
+    try {
+      var el = document.getElementById('annual-income');
+      var v = (el && el.value) ? parseFloat(String(el.value).replace(',', '.')) : NaN;
+      if (!isFinite(v)) return true; // deja que el backend valide
+      if (v < 10000) {
+        alert('NOOOO con estos ingresos no te podemos adelantear.');
+        evt && evt.preventDefault();
+        return false;
+      }
+    } catch (e) {}
+    return true;
+  }
+
+  (function(){
+    var msg = {{ (('"' + popup_message + '"') if popup_message else 'null') | safe }};
+    if (msg) {
+      alert(msg);
+    }
+  })();
+</script>
+{% endblock %}
+

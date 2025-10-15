@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Entradas de tiempo</h2>
+  <table style="width:100%; border-collapse: collapse; margin-top:8px;">
+    <thead>
+      <tr>
+        <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">ID</th>
+        <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Usuario</th>
+        <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Tipo</th>
+        <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Estado</th>
+        <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Inicio</th>
+        <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Fin</th>
+        <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td style="padding:6px;">{{ e.id }}</td>
+        <td style="padding:6px;">{{ e.user }}</td>
+        <td style="padding:6px;">{{ e.type }}</td>
+        <td style="padding:6px;">{{ e.status }}</td>
+        <td style="padding:6px;">{{ e.ts_in }}</td>
+        <td style="padding:6px;">{{ e.ts_out }}</td>
+        <td style="padding:6px;">
+          {% if current_user.role.value != 'invitado' %}
+            <form method="post" action="{{ url_for('entries_approve', entry_id=e.id) }}" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-small btn-green" type="submit">Aprobar</button>
+            </form>
+            <form method="post" action="{{ url_for('entries_edit', entry_id=e.id) }}" style="display:inline;margin-left:6px;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-small" type="submit">Editar (demo)</button>
+            </form>
+          {% else %}
+            <span class="muted">Solo lectura</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="padding:6px;">Sin resultados</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+

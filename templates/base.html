@@ -5,33 +5,154 @@
   <title>{{ title or "Fichaje" }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <script>
+    (function(){
+      try {
+        var saved = localStorage.getItem('theme');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (saved === 'dark' || (!saved && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <script>
+    document.addEventListener('htmx:configRequest', function (event) {
+      var meta = document.querySelector('meta[name="csrf-token"]');
+      if (meta) {
+        event.detail.headers['X-CSRFToken'] = meta.getAttribute('content');
+      }
+    });
+  </script>
   <style>
     body{font-family:system-ui,Arial;margin:24px}
     .card{border:1px solid #ddd;border-radius:10px;padding:16px;max-width:520px}
-    .btn{padding:10px 14px;border-radius:8px;border:1px solid #333;background:#f7f7f7;cursor:pointer}
+    .btn{display:inline-flex;align-items:center;gap:10px;padding:14px 20px;border-radius:14px;border:none;background:#f0f0f0;color:#111;cursor:pointer;font-weight:600;transition:transform .02s ease, box-shadow .2s ease, background-color .15s ease, filter .15s ease;box-shadow:0 2px 0 rgba(0,0,0,.15)}
+    .btn:focus{outline:3px solid rgba(33,150,243,.45);outline-offset:2px}
+    .btn:hover{transform:translateY(-1px);box-shadow:0 6px 14px rgba(0,0,0,.12)}
+    .btn:active{transform:translateY(0);filter:brightness(.95)}
+    .btn .icon{display:inline-block;margin-right:8px;width:20px;height:20px}
+    .btn-hero{border-radius:10px;font-size:16px}
+    .btn-green{background:#14a44d;color:#fff}
+    .btn-green:hover{background:#0f8c40}
+    .btn-red{background:#e31b23;color:#fff}
+    .btn-red:hover{background:#c6171e}
+    .btn-yellow{background:#f2b400;color:#fff}
+    .btn-yellow:hover{background:#d49c00}
+    .btn-small{padding:8px 12px;border-radius:8px;font-size:14px}
+    .btn-dim{opacity:.45}
+    .btn[disabled]{opacity:.5;cursor:not-allowed;transform:none;filter:none}
+    .actions-right{display:flex;gap:8px;align-items:center}
     .row{margin-top:12px}.muted{color:#666}
+    .header{display:flex;align-items:center;justify-content:space-between}
+    .center{display:flex;justify-content:center}
+    .section-title{font-weight:700;margin:8px 0}
+    .layout{display:flex;gap:16px}
+    .nav{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #ddd;border-radius:12px;padding:8px 10px;position:sticky;top:12px;z-index:5}
+    .nav a{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;color:#111;text-decoration:none}
+    .nav a:hover{background:#f5f5f5}
+    .nav .icon{width:18px;height:18px}
+    .main{flex:1}
+    @media (min-width: 900px){
+      .layout{align-items:flex-start}
+      .nav{flex-direction:column;width:220px;height:calc(100vh - 48px);top:24px}
+      .main{flex:1}
+    }
+    .header h2{color:#111}
     .ok{background:#e8f7ee;border:1px solid #2e7d32;padding:12px;border-radius:8px}
     .warn{background:#fff3cd;border:1px solid #ffca2c;padding:12px;border-radius:8px}
+    .hist{list-style:none;padding:0;margin:8px 0 0}
+    .hist li{padding:8px 10px;border:1px solid #eee;border-radius:8px;margin-top:6px;display:flex;gap:8px;align-items:center}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700}
+    .pill-in{background:#e8f5e9;color:#1b5e20}
+    .pill-out{background:#ffebee;color:#b71c1c}
     form{display:flex;flex-direction:column;gap:10px;max-width:360px}
     input{padding:10px;border:1px solid #ccc;border-radius:8px}
+    .btn-outline{background:#fff;color:#8a6d3b;border:1px solid #ffca2c}
+    .btn-outline:hover{background:#fff7d6}
+    dialog.modal{border:none;border-radius:12px;padding:0;max-width:740px;width:90%}
+    dialog::backdrop{background:rgba(0,0,0,.35)}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee;font-weight:700}
+    .modal-body{padding:16px}
+    .modal-actions{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #eee}
+    .inline{display:flex;gap:8px;align-items:center}
+    .input-sm{padding:8px 10px;font-size:14px}
+    .w-80{width:80px}
+    .w-120{width:120px}
+    .is-invalid{border-color:#e31b23 !important}
+    .dark .is-invalid{border-color:#ff6b6b !important}
+    .dark body{background:#121212;color:#eaeaea}
+    .dark .card{background:#1e1e1e;border-color:#333}
+    .dark .muted{color:#aaa}
+    .dark input{background:#111;color:#eee;border-color:#444}
+    .dark select{background:#111;color:#eee;border-color:#444}
+    .dark textarea{background:#111;color:#eee;border-color:#444}
+    .dark .btn{background:#2a2a2a;color:#fff}
+    .dark .btn:hover{box-shadow:0 6px 14px rgba(0,0,0,.4)}
+    .dark .btn-outline{background:transparent;color:#ffca2c;border:1px solid #ffca2c}
+    .dark .btn-outline:hover{background:rgba(255,202,44,.12)}
+    .dark .btn-green{background:#14a44d;color:#fff}
+    .dark .btn-green:hover{background:#0f8c40}
+    .dark .btn-red{background:#e31b23;color:#fff}
+    .dark .btn-red:hover{background:#c6171e}
+    .dark .btn-yellow{background:#f2b400;color:#fff}
+    .dark .btn-yellow:hover{background:#d49c00}
+    .dark h1,.dark h2,.dark h3{color:#ffffff}
+    .dark .header h2{color:#ffffff}
+    .dark .ok{background:#123d26;border-color:#2e7d32}
+    .dark .warn{background:#4a3f1a;border-color:#ffca2c}
+    .dark dialog.modal{background:#1e1e1e;color:#eaeaea}
+    .dark .modal-header{border-bottom-color:#333}
+    .dark .modal-actions{border-top-color:#333}
+    .dark .nav{background:#0f1113;border-color:#222}
+    .dark .nav a{color:#d6d6d6}
+    .dark .nav a:hover{background:#24292e}
   </style>
 </head>
 <body>
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div class="row">
-        {% for cat, msg in messages %}
-          <div class="{{ 'warn' if cat=='error' else 'ok' }}">{{ msg }}</div>
-        {% endfor %}
-      </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      if (window.lucide && window.lucide.createIcons) {
+        window.lucide.createIcons();
+      }
+    });
+    document.addEventListener('htmx:afterSwap', function(){
+      if (window.lucide && window.lucide.createIcons) {
+        window.lucide.createIcons();
+      }
+    });
+    window.toggleTheme = function(){
+      var root = document.documentElement;
+      var dark = root.classList.toggle('dark');
+      try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch (e) {}
+      if (window.lucide && window.lucide.createIcons) { window.lucide.createIcons(); }
+    };
+  </script>
+  <div class="layout">
+    {% if current_user.is_authenticated %}
+    <nav class="nav">
+      <a href="{{ url_for('index') }}"><i data-lucide="home" class="icon"></i> Inicio</a>
+      {% if current_user.role.value == 'admin' %}
+      <a href="{{ url_for('admin_home') }}"><i data-lucide="layout-dashboard" class="icon"></i> Panel de administracion</a>
+      {% endif %}
+      <a href="{{ url_for('requests_page') }}"><i data-lucide="file-plus" class="icon"></i> Solicitudes</a>
+      <a href="{{ url_for('info_page') }}"><i data-lucide="info" class="icon"></i> Informacion</a>
+    </nav>
     {% endif %}
-  {% endwith %}
-  {% if current_user.is_authenticated and current_user.role.value == 'admin' %}
-  <div class="row">
-    <a href="{{ url_for('admin_users') }}">Panel de administración</a>
+    <main class="main">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="row">
+            {% for cat, msg in messages %}
+              <div class="{{ 'warn' if cat=='error' else 'ok' }}">{{ msg }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
   </div>
-{% endif %}
-
-  {% block content %}{% endblock %}
 </body>
 </html>

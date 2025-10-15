@@ -1,24 +1,185 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 <div class="card">
-  <h2>Fichaje</h2>
+  <div class="header">
+    <h2 style="margin:0;">Fichaje</h2>
+    <div class="actions-right">
+      <button id="btn-theme" class="btn btn-small" type="button" title="Cambiar tema" onclick="(function(){ toggleTheme(); var b=document.getElementById('btn-theme'); var dark=document.documentElement.classList.contains('dark'); b.innerHTML = dark? '<i data-lucide=\'sun\' class=\'icon\'></i>' : '<i data-lucide=\'moon\' class=\'icon\'></i>'; if (window.lucide&&window.lucide.createIcons) window.lucide.createIcons(); })()"><i data-lucide="moon" class="icon"></i></button>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-small" type="submit">Salir</button>
+      </form>
+    </div>
+  </div>
 
-  <form method="post" action="/logout">
-    {{ csrf_token() }}
-    <button class="btn" type="submit">Salir</button>
-  </form>
+  <div class="row center">
+    <span id="server-time" data-server-epoch="{{ server_now_utc }}" style="font-size:32px;font-weight:800;">--:--:--</span>
+  </div>
 
-  <div class="row">
-    <button class="btn"
+  <div class="row center">
+    <button id="btn-in" class="btn btn-hero btn-green"
             hx-post="/clock"
+            hx-vals='{"action":"in"}'
             hx-target="#resultado"
-            hx-swap="innerHTML">
-      {{ "Fichar salida" if dentro else "Fichar entrada" }}
+            hx-swap="innerHTML"
+            title="Pulsa si vas a entrar">
+      <i data-lucide="log-in" class="icon"></i> Registrar ENTRADA
     </button>
   </div>
+  <div class="row center">
+    <button id="btn-out" class="btn btn-hero btn-red"
+            hx-post="/clock"
+            hx-vals='{"action":"out"}'
+            hx-target="#resultado"
+            hx-swap="innerHTML"
+            title="Pulsa si vas a salir">
+      <i data-lucide="log-out" class="icon"></i> Registrar SALIDA
+    </button>
+  </div>
+  <script>
+    (function(){
+      var el = document.getElementById('server-time');
+      if(!el) return;
+      var serverEpochMs = parseFloat(el.dataset.serverEpoch) * 1000;
+      var offsetMs = serverEpochMs - Date.now();
+      var fmt = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      function tick(){
+        var now = new Date(Date.now() + offsetMs);
+        el.textContent = fmt.format(now);
+      }
+      tick();
+      setInterval(tick, 1000);
+      // Recalcular de forma ligera al recuperar el foco para corregir pequeÃ±as derivas
+      document.addEventListener('visibilitychange', function(){
+        if (!document.hidden) {
+          // offset conservado para mantener continuidad
+          tick();
+        }
+      });
+    })();
+  </script>
 
   <div id="resultado" class="row">
     {% include "_status.html" with context %}
   </div>
+
+  <div class="row center">
+    <button id="btn-report" class="btn btn-small btn-outline" type="button">&#9888; Reportar incidencia</button>
+  </div>
+
+  <div id="pausa" class="row">
+    {% include "_pause.html" with context %}
+  </div>
+
+  <div class="row">
+    <div class="muted">Pausas hoy: <strong id="pausa-total-value">{{ pause_total_today_fmt }}</strong></div>
+  </div>
+
+  <!-- Modals de incidencias -->
+  <dialog id="modal-report" class="modal">
+    <div class="modal-header">
+      <div>Reportar incidencia</div>
+      <button class="btn btn-small" onclick="document.getElementById('modal-report').close()">Cerrar</button>
+    </div>
+    <div class="modal-body">
+      <div class="row">
+        <button class="btn btn-hero btn-yellow" id="opt-forgot" type="button">Me he olvidado fichar</button>
+      </div>
+      <div class="row">
+        <button class="btn btn-hero btn-red" id="opt-wrong" type="button">Fichaje incorrecto</button>
+      </div>
+      <div class="row">
+        <button class="btn btn-hero btn-green" id="opt-other" type="button">Otro motivo</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="modal-forgot" class="modal">
+    <div class="modal-header">
+      <div>He olvidado fichar</div>
+      <button class="btn btn-small" onclick="document.getElementById('modal-forgot').close()">Cerrar</button>
+    </div>
+    <div class="modal-body">
+      <div class="row">
+        <label>Fecha</label>
+        <div class="inline">
+          <input id="forgot-date-picker" class="input-sm" type="date">
+        </div>
+      </div>
+      <div class="row inline">
+        <label>Hora</label>
+        <input id="forgot-hour" class="input-sm w-80" type="number" min="0" max="23" placeholder="HH">
+        <input id="forgot-min" class="input-sm w-80" type="number" min="0" max="59" placeholder="MM">
+        <select id="forgot-type" class="input-sm">
+          <option value="in">Entrada</option>
+          <option value="out">Salida</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-small btn-outline" onclick="document.getElementById('modal-forgot').close()">Cancelar</button>
+      <button class="btn btn-small btn-green" onclick="document.getElementById('modal-forgot').close()">Enviar (demo)</button>
+    </div>
+  </dialog>
+
+  <dialog id="modal-wrong" class="modal">
+    <div class="modal-header">
+      <div>Fichaje incorrecto</div>
+      <button class="btn btn-small" onclick="document.getElementById('modal-wrong').close()">Cerrar</button>
+    </div>
+    <div class="modal-body">
+      <textarea style="width:100%;height:120px;padding:10px;border:1px solid #ccc;border-radius:8px" placeholder="Describe brevemente lo ocurrido..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-small btn-outline" onclick="document.getElementById('modal-wrong').close()">Cancelar</button>
+      <button class="btn btn-small btn-green" onclick="document.getElementById('modal-wrong').close()">Enviar (demo)</button>
+    </div>
+  </dialog>
+
+  <dialog id="modal-other" class="modal">
+    <div class="modal-header">
+      <div>Otro motivo</div>
+      <button class="btn btn-small" onclick="document.getElementById('modal-other').close()">Cerrar</button>
+    </div>
+    <div class="modal-body">
+      <textarea style="width:100%;height:120px;padding:10px;border:1px solid #ccc;border-radius:8px" placeholder="Cuéntanos el motivo..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-small btn-outline" onclick="document.getElementById('modal-other').close()">Cancelar</button>
+      <button class="btn btn-small btn-green" onclick="document.getElementById('modal-other').close()">Enviar (demo)</button>
+    </div>
+  </dialog>
+
+  <script>
+    (function(){
+      var btn = document.getElementById('btn-report');
+      if (btn) btn.addEventListener('click', function(){ document.getElementById('modal-report').showModal(); });
+      var goForgot = document.getElementById('opt-forgot');
+      var goWrong = document.getElementById('opt-wrong');
+      var goOther = document.getElementById('opt-other');
+      if (goForgot) goForgot.addEventListener('click', function(){
+        document.getElementById('modal-report').close();
+        var dp = document.getElementById('forgot-date-picker');
+        if (dp) {
+          var now = new Date();
+          var yyyy = now.getFullYear();
+          var mm = String(now.getMonth()+1).padStart(2,'0');
+          var dd = String(now.getDate()).padStart(2,'0');
+          dp.value = yyyy + '-' + mm + '-' + dd;
+        }
+        document.getElementById('modal-forgot').showModal();
+      });
+      if (goWrong) goWrong.addEventListener('click', function(){
+        document.getElementById('modal-report').close();
+        document.getElementById('modal-wrong').showModal();
+      });
+      if (goOther) goOther.addEventListener('click', function(){
+        document.getElementById('modal-report').close();
+        document.getElementById('modal-other').showModal();
+      });
+      // Envío de incidencias: demo (sin acción por ahora)
+    })();
+  </script>
 </div>
 {% endblock %}
+
