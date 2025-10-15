@@ -2,10 +2,11 @@ from functools import wraps
 from flask import abort
 from flask_login import current_user
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 from models import SessionLocal, User, Role, TimeEntry, GuestAccess
 
 
-def can_view_user(requester: User, target: User) -> bool:
+def can_view_user(requester: User, target: User, db: Session = None) -> bool:
     if requester.role in (Role.admin, Role.rrhh):
         return True
     if requester.role == Role.employee:
@@ -16,17 +17,21 @@ def can_view_user(requester: User, target: User) -> bool:
         return requester.area_id and requester.area_id == target.area_id
     if requester.role == Role.invitado:
         # Solo si hay GuestAccess
-        db = SessionLocal()
+        close_db = False
+        if db is None:
+            db = SessionLocal()
+            close_db = True
         try:
             ga = db.execute(
                 select(GuestAccess).where(
                     GuestAccess.guest_user_id == requester.id,
                     GuestAccess.target_user_id == target.id,
                 )
-            ).first()
+            ).scalar_one_or_none()
             return ga is not None
         finally:
-            db.close()
+            if close_db:
+                db.close()
     return False
 
 
