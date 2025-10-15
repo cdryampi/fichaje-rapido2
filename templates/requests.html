@@ -2,6 +2,27 @@
 {% block content %}
 <div class="card">
   <h2>Solicitudes</h2>
+  <script>
+    // Inserta botón Adelanto en la fila de adelanto y elimina el placeholder "Próximamente"
+    document.addEventListener('DOMContentLoaded', function(){
+      try {
+        var icon = document.querySelector('i[data-lucide="wallet"]');
+        if (!icon) return;
+        var row = icon.closest('div[style*="justify-content:space-between"]');
+        if (!row) return;
+        var link = document.createElement('a');
+        link.className = 'btn btn-small btn-green';
+        link.href = '{{ url_for("advance_request") }}';
+        link.textContent = 'Adelanto';
+        var placeholder = row.querySelector('button[disabled]');
+        if (placeholder) {
+          placeholder.replaceWith(link);
+        } else {
+          row.appendChild(link);
+        }
+      } catch (e) {}
+    });
+  </script>
   
   <div class="row">
     <div style="display:flex;flex-direction:column;gap:10px;width:100%">
