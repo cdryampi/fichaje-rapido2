@@ -1,0 +1,57 @@
+name: Deploy to Dokploy
+
+on:
+    push:
+        branches:
+            - yampi
+    workflow_dispatch: # Permite ejecutar manualmente desde GitHub
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: 📦 Checkout code
+              uses: actions/checkout@v4
+
+            - name: 🚀 Trigger Dokploy Deploy
+              run: |
+                  echo "Iniciando deploy en Dokploy..."
+                  response=$(curl -s -w "\n%{http_code}" -X POST \
+                    http://46.202.171.172:3000/api/deploy/compose/LWBMzX2Ws7cMgIvN0tlKr)
+
+                  http_code=$(echo "$response" | tail -n1)
+                  body=$(echo "$response" | head -n-1)
+
+                  echo "HTTP Status: $http_code"
+                  echo "Response: $body"
+
+                  if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
+                    echo "✓ Deploy iniciado correctamente"
+                    exit 0
+                  else
+                    echo "✗ Error al iniciar deploy"
+                    exit 1
+                  fi
+
+            - name: ✅ Deploy Status
+              if: success()
+              run: |
+                  echo "================================================"
+                  echo "✓ Deploy disparado exitosamente en Dokploy"
+                  echo "================================================"
+                  echo "Revisa el progreso en:"
+                  echo "http://46.202.171.172:3000"
+                  echo "================================================"
+
+            - name: ❌ Deploy Failed
+              if: failure()
+              run: |
+                  echo "================================================"
+                  echo "✗ Error al disparar el deploy"
+                  echo "================================================"
+                  echo "Verifica:"
+                  echo "1. Que Dokploy esté accesible"
+                  echo "2. Que la URL del webhook sea correcta"
+                  echo "3. Los logs en Dokploy"
+                  echo "================================================"
