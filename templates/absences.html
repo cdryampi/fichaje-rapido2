@@ -6,33 +6,6 @@
     <a class="btn btn-small" href="{{ url_for('requests_page') }}">Volver</a>
   </div>
   <div class="row">
-    <form action="{{ url_for('absences_create') }}" method="post" class="inline" style="flex-wrap:wrap;gap:12px;align-items:flex-end;">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <label>Tipo</label>
-        <select name="type" class="input-sm">
-          <option value="vacaciones">Vacaciones</option>
-        </select>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <label>Subtipo</label>
-        <select name="subtype" class="input-sm">
-          <option value="vacaciones">Vacaciones</option>
-        </select>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <label>Desde</label>
-        <input type="date" name="from" class="input-sm" required>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <label>Hasta</label>
-        <input type="date" name="to" class="input-sm" required>
-      </div>
-      <button class="btn btn-green btn-small" type="submit">Crear solicitud</button>
-    </form>
-  </div>
-
-  <div class="row">
     <h3 class="section-title">Mis ausencias</h3>
     <div style="overflow:auto">
       <table style="width:100%;border-collapse:collapse">
@@ -58,6 +31,33 @@
         </tbody>
       </table>
     </div>
+  </div>
+
+  <div class="row">
+    <form action="{{ url_for('absences_create') }}" method="post" class="inline" style="flex-wrap:wrap;gap:12px;align-items:flex-end;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label>Tipo</label>
+        <select name="type" class="input-sm">
+          <option value="vacaciones">Vacaciones</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label>Subtipo</label>
+        <select name="subtype" class="input-sm">
+          <option value="vacaciones">Vacaciones</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label>Desde</label>
+        <input type="date" name="from" class="input-sm" required>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label>Hasta</label>
+        <input type="date" name="to" class="input-sm" required>
+      </div>
+      <button class="btn btn-green btn-small" type="submit">Crear solicitud</button>
+    </form>
   </div>
 
   {% if pending and pending|length %}
