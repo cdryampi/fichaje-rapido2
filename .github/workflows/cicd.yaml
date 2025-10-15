@@ -4,7 +4,8 @@ on:
     push:
         branches:
             - yampi
-    workflow_dispatch: # Permite ejecutar manualmente desde GitHub
+            - main
+    workflow_dispatch:
 
 jobs:
     deploy:
@@ -16,9 +17,12 @@ jobs:
 
             - name: 🚀 Trigger Dokploy Deploy
               run: |
-                  echo "Iniciando deploy en Dokploy..."
-                  response=$(curl -s -w "\n%{http_code}" -X POST \
-                    http://46.202.171.172:3000/api/deploy/compose/LWBMzX2Ws7cMglvN0tiKr)
+                  echo "Iniciando deploy en Dokploy desde rama: ${{ github.ref_name }}"
+
+                  WEBHOOK_URL="http://46.202.171.172:3000/api/deploy/compose/LWBMzX2Ws7cMglvN0tiKr"
+
+                  echo "Llamando a webhook..."
+                  response=$(curl -s -w "\n%{http_code}" -X POST "$WEBHOOK_URL")
 
                   http_code=$(echo "$response" | tail -n1)
                   body=$(echo "$response" | head -n-1)
@@ -26,11 +30,16 @@ jobs:
                   echo "HTTP Status: $http_code"
                   echo "Response: $body"
 
-                  if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
+                  if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ] || [ "$http_code" -eq 202 ]; then
                     echo "✓ Deploy iniciado correctamente"
                     exit 0
                   else
-                    echo "✗ Error al iniciar deploy"
+                    echo "✗ Error al iniciar deploy (HTTP $http_code)"
+                    if [[ "$body" == *"Branch Not Match"* ]]; then
+                      echo ""
+                      echo "⚠️  La rama '${{ github.ref_name }}' no coincide con la configurada en Dokploy"
+                      echo "   Solución: Ve a Dokploy > General > Branch y cámbiala a 'yampi'"
+                    fi
                     exit 1
                   fi
 
@@ -39,6 +48,9 @@ jobs:
               run: |
                   echo "================================================"
                   echo "✓ Deploy disparado exitosamente en Dokploy"
+                  echo "  Rama: ${{ github.ref_name }}"
+                  echo "  Commit: ${{ github.sha }}"
+                  echo "  Autor: ${{ github.actor }}"
                   echo "================================================"
                   echo "Revisa el progreso en:"
                   echo "http://46.202.171.172:3000"
@@ -50,8 +62,10 @@ jobs:
                   echo "================================================"
                   echo "✗ Error al disparar el deploy"
                   echo "================================================"
-                  echo "Verifica:"
-                  echo "1. Que Dokploy esté accesible"
-                  echo "2. Que la URL del webhook sea correcta"
-                  echo "3. Los logs en Dokploy"
+                  echo "Rama actual: ${{ github.ref_name }}"
+                  echo ""
+                  echo "Solución:"
+                  echo "1. Ve a Dokploy > tu app > General"
+                  echo "2. Verifica que el campo 'Branch' sea: yampi"
+                  echo "3. Guarda y vuelve a intentar"
                   echo "================================================"
