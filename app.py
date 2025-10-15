@@ -52,6 +52,17 @@ def fmt_hm(seconds: int) -> str:
     m = (s % 3600) // 60
     return f"{sign}{h:02d}:{m:02d}"
 
+def parse_local_date(d: str):
+    """Parsea 'YYYY-MM-DD' como datetime en zona local (00:00)."""
+    try:
+        parts = d.split('-')
+        if len(parts) != 3:
+            return None
+        y, m, day = [int(x) for x in parts]
+        return datetime(y, m, day, 0, 0, 0, tzinfo=TZ)
+    except Exception:
+        return None
+
 import os
 
 app = Flask(__name__)
@@ -74,7 +85,8 @@ def inject_template_globals():
     return {
         "current_year": datetime.now(TZ).year,
         # Nombre del propietario/empresa configurable por entorno
-        "owner_name": os.environ.get("OWNER_NAME", "Fichaje Rápido"),
+        "owner_name": os.environ.get("OWNER_NAME", "Fichaje Rapido"),
+        "TZ": TZ,
     }
 
 
@@ -670,6 +682,111 @@ def requests_page():
     return render_template("requests.html")
 
 
+# --------- AUSENCIAS (VACACIONES) ---------
+from models import Absence, EntryStatus
+
+def _is_approver_for(approver: User, target: User) -> bool:
+    if approver.role in (Role.admin, Role.rrhh):
+        return True
+    if approver.role == Role.responsable:
+        return approver.group_id and approver.group_id == target.group_id
+    if approver.role == Role.cap_area:
+        return approver.area_id and approver.area_id == target.area_id
+    return False
+
+
+@app.route("/absences", methods=["GET"])
+@login_required
+def absences_page():
+    db = SessionLocal()
+    try:
+        mine = db.execute(select(Absence).where(Absence.user_id == current_user.id).order_by(Absence.date_from.desc())).scalars().all()
+
+        pending_for_me = []
+        if current_user.role in (Role.admin, Role.rrhh, Role.responsable, Role.cap_area):
+            q_users = select(User)
+            if current_user.role == Role.responsable and current_user.group_id:
+                q_users = q_users.where(User.group_id == current_user.group_id)
+            elif current_user.role == Role.cap_area and current_user.area_id:
+                q_users = q_users.where(User.area_id == current_user.area_id)
+            users = db.execute(q_users).scalars().all()
+            user_ids = [u.id for u in users]
+            if user_ids:
+                pending_for_me = db.execute(
+                    select(Absence).where(Absence.user_id.in_(user_ids), Absence.status == EntryStatus.pending).order_by(Absence.date_from.desc())
+                ).scalars().all()
+
+        return render_template("absences.html", mine=mine, pending=pending_for_me)
+    finally:
+        db.close()
+
+
+@app.route("/absences/create", methods=["POST"])
+@login_required
+def absences_create():
+    a_type = (request.form.get("type") or "").strip().lower()
+    a_subtype = (request.form.get("subtype") or "").strip().lower() or None
+    f = parse_local_date(request.form.get("from") or "")
+    t = parse_local_date(request.form.get("to") or "")
+    if not a_type or not f or not t:
+        flash("Faltan campos obligatorios.", "error")
+        return redirect(url_for("absences_page"))
+    if t < f:
+        flash("Rango de fechas inválido.", "error")
+        return redirect(url_for("absences_page"))
+
+    start_utc = f.astimezone(timezone.utc)
+    end_utc = t.replace(hour=23, minute=59, second=59, microsecond=999999).astimezone(timezone.utc)
+
+    db = SessionLocal()
+    try:
+        rec = Absence(user_id=current_user.id, date_from=start_utc, date_to=end_utc, type=a_type, subtype=a_subtype, status=EntryStatus.pending)
+        db.add(rec)
+        db.commit()
+        flash("Solicitud de ausencia creada.", "ok")
+    finally:
+        db.close()
+    return redirect(url_for("absences_page"))
+
+
+@app.route("/absences/<int:abs_id>/approve", methods=["POST"])
+@login_required
+def absences_approve(abs_id):
+    db = SessionLocal()
+    try:
+        a = db.get(Absence, abs_id)
+        if not a:
+            abort(404)
+        u = db.get(User, a.user_id)
+        if not _is_approver_for(current_user, u):
+            abort(403)
+        a.status = EntryStatus.approved
+        db.commit()
+        flash("Ausencia aprobada.", "ok")
+        return redirect(url_for("absences_page"))
+    finally:
+        db.close()
+
+
+@app.route("/absences/<int:abs_id>/reject", methods=["POST"])
+@login_required
+def absences_reject(abs_id):
+    db = SessionLocal()
+    try:
+        a = db.get(Absence, abs_id)
+        if not a:
+            abort(404)
+        u = db.get(User, a.user_id)
+        if not _is_approver_for(current_user, u):
+            abort(403)
+        a.status = EntryStatus.rejected
+        db.commit()
+        flash("Ausencia rechazada.", "ok")
+        return redirect(url_for("absences_page"))
+    finally:
+        db.close()
+
+
 @app.route("/requests/adelanto", methods=["GET", "POST"])
 @login_required
 def advance_request():
@@ -738,6 +855,25 @@ def time_info_page():
             d = ts_local.date()
             by_day.setdefault(d, []).append((ts_local, r.action))
 
+        # Approved vacation days: expected hours should be 0
+        vac_days = set()
+        vacs = db.execute(
+            select(Absence)
+            .where(
+                Absence.user_id == current_user.id,
+                Absence.status == EntryStatus.approved,
+                func.lower(Absence.type) == 'vacaciones'
+            )
+        ).scalars().all()
+        for a in vacs:
+            a_start_local = ensure_aware_utc(a.date_from).astimezone(TZ).date()
+            a_end_local = ensure_aware_utc(a.date_to).astimezone(TZ).date()
+            cur = a_start_local
+            while cur <= a_end_local:
+                vac_days.add(cur)
+                from datetime import timedelta
+                cur = cur + timedelta(days=1)
+
         import calendar
         months = []
         for month in range(1, 13):
@@ -764,6 +900,8 @@ def time_info_page():
                             pair_strs.append(f"{last_in.strftime('%H:%M')} → {ts.strftime('%H:%M')}")
                         last_in = None
                 expected = 27000 if weekday < 5 else 0
+                if d in vac_days:
+                    expected = 0
                 month_worked += worked
                 month_expected += expected
                 daily.append({

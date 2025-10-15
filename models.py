@@ -122,6 +122,7 @@ class Absence(Base):
     date_from = Column(DateTime(timezone=True), nullable=False)
     date_to = Column(DateTime(timezone=True), nullable=False)
     type = Column(String(50), nullable=False)
+    subtype = Column(String(50))
     status = Column(Enum(EntryStatus), default=EntryStatus.pending, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     user = relationship("User")
@@ -159,6 +160,14 @@ def init_db_with_demo():
             if 'area_id' not in cols:
                 con.exec_driver_sql("ALTER TABLE users ADD COLUMN area_id INTEGER")
                 migrated.append('area_id')
+            # Ensure 'subtype' column exists on 'absences'
+            try:
+                abs_cols = [r[1] for r in con.exec_driver_sql("PRAGMA table_info('absences')").fetchall()]
+                if 'subtype' not in abs_cols:
+                    con.exec_driver_sql("ALTER TABLE absences ADD COLUMN subtype VARCHAR(50)")
+                    print("✔ Columna 'subtype' agregada a 'absences'")
+            except Exception as e:
+                print(f"⚠ Advertencia al migrar 'absences.subtype': {e}")
             if migrated:
                 print(f"✓ Columnas migradas: {', '.join(migrated)}")
     except Exception as e:

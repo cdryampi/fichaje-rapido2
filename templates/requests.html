@@ -33,6 +33,7 @@
           <button class="btn btn-small btn-red" type="button" onclick="document.getElementById('modal-absence-admin').showModal()">Editar</button>
           {% endif %}
           <button class="btn btn-small btn-green" type="button" onclick="document.getElementById('modal-absence').showModal()">Crear solicitud</button>
+          <a class="btn btn-small" href="{{ url_for('absences_page') }}">Gestionar ausencias</a>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #eee;border-radius:8px;padding:10px 12px;">

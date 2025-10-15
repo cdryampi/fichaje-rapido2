@@ -49,18 +49,26 @@
     .header{display:flex;align-items:center;justify-content:space-between}
     .center{display:flex;justify-content:center}
     .section-title{font-weight:700;margin:8px 0}
-    .layout{display:flex;gap:16px}
-    .nav{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #ddd;border-radius:12px;padding:8px 10px;position:sticky;top:12px;z-index:5}
-    .nav a,.nav button{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;color:#111;text-decoration:none;font:inherit;background:none;border:none;cursor:pointer}
+    /* Layout responsive (mobile-first) */
+    .layout{display:flex;gap:16px;flex-direction:column}
+    .nav{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #ddd;border-radius:12px;padding:8px 10px;position:sticky;top:12px;z-index:5;overflow-x:auto;flex-wrap:nowrap}
+    .nav a,.nav button{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;color:#111;text-decoration:none;font:inherit;background:none;border:none;cursor:pointer;white-space:nowrap;flex:0 0 auto}
     .nav a:hover,.nav button:hover{background:#f5f5f5}
-    .nav button{width:100%;text-align:left}
+    .nav button{width:auto;text-align:left}
+    .mobile-nav-toggle{display:flex;align-items:center;gap:8px;margin:0 0 8px 0}
+    @media (max-width: 899px){
+      .nav.is-hidden{display:none}
+    }
     .nav .icon{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
     .main{flex:1}
     .footer{margin-top:32px;padding:16px 0;color:#666;text-align:center;font-size:14px}
     @media (min-width: 900px){
-      .layout{align-items:flex-start}
-      .nav{flex-direction:column;width:220px;height:calc(100vh - 48px);top:24px}
+      .layout{align-items:flex-start;flex-direction:row}
+      .nav{flex-direction:column;width:220px;height:calc(100vh - 48px);top:24px;overflow-x:visible}
+      .nav.is-hidden{display:flex}
+      .nav button{width:100%}
       .main{flex:1}
+      .mobile-nav-toggle{display:none}
     }
     .header h2{color:#111}
     .ok{background:#e8f7ee;border:1px solid #2e7d32;padding:12px;border-radius:8px}
@@ -135,7 +143,10 @@
   </script>
   <div class="layout">
     {% if current_user.is_authenticated %}
-    <nav class="nav">
+    <button type="button" class="mobile-nav-toggle btn btn-small" data-nav-toggle>
+      <i data-lucide="menu" class="icon"></i> Menú
+    </button>
+    <nav class="nav" data-nav>
       <a href="{{ url_for('index') }}"><i data-lucide="home" class="icon"></i> Inicio</a>
       {% if current_user.role.value == 'admin' %}
       <a href="{{ url_for('admin_home') }}"><i data-lucide="layout-dashboard" class="icon"></i> Panel de administracion</a>
@@ -209,6 +220,30 @@
         document.addEventListener('DOMContentLoaded', bindHelp);
       } else {
         bindHelp();
+      }
+    })();
+  </script>
+  <script>
+    (function(){
+      function bindNavToggle(){
+        var toggle = document.querySelector('[data-nav-toggle]');
+        var nav = document.querySelector('[data-nav]');
+        if (!toggle || !nav) { return; }
+        try {
+          var isSmall = window.matchMedia && window.matchMedia('(max-width: 899px)').matches;
+          var saved = localStorage.getItem('navHidden');
+          if (isSmall && saved === '1') { nav.classList.add('is-hidden'); }
+        } catch (e) {}
+        toggle.addEventListener('click', function(){
+          nav.classList.toggle('is-hidden');
+          try { localStorage.setItem('navHidden', nav.classList.contains('is-hidden') ? '1' : '0'); } catch (e) {}
+          if (window.lucide && window.lucide.createIcons) { window.lucide.createIcons(); }
+        });
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindNavToggle);
+      } else {
+        bindNavToggle();
       }
     })();
   </script>

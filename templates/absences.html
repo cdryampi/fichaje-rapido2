@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="header">
+    <h2>Ausencias</h2>
+    <a class="btn btn-small" href="{{ url_for('requests_page') }}">Volver</a>
+  </div>
+  <div class="row">
+    <form action="{{ url_for('absences_create') }}" method="post" class="inline" style="flex-wrap:wrap;gap:12px;align-items:flex-end;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label>Tipo</label>
+        <select name="type" class="input-sm">
+          <option value="vacaciones">Vacaciones</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label>Subtipo</label>
+        <select name="subtype" class="input-sm">
+          <option value="vacaciones">Vacaciones</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label>Desde</label>
+        <input type="date" name="from" class="input-sm" required>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label>Hasta</label>
+        <input type="date" name="to" class="input-sm" required>
+      </div>
+      <button class="btn btn-green btn-small" type="submit">Crear solicitud</button>
+    </form>
+  </div>
+
+  <div class="row">
+    <h3 class="section-title">Mis ausencias</h3>
+    <div style="overflow:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr>
+            <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Desde</th>
+            <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Hasta</th>
+            <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Tipo</th>
+            <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in mine %}
+          <tr>
+            <td style="padding:6px;">{{ a.date_from.astimezone(TZ).strftime('%d/%m/%Y') if a.date_from.tzinfo else a.date_from.strftime('%d/%m/%Y') }}</td>
+            <td style="padding:6px;">{{ a.date_to.astimezone(TZ).strftime('%d/%m/%Y') if a.date_to.tzinfo else a.date_to.strftime('%d/%m/%Y') }}</td>
+            <td style="padding:6px;">{{ a.type|capitalize }}{% if a.subtype %} / {{ a.subtype|capitalize }}{% endif %}</td>
+            <td style="padding:6px;">{{ a.status.value }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted" style="padding:8px;">Sin ausencias.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if pending and pending|length %}
+  <div class="row">
+    <h3 class="section-title">Pendientes de aprobación</h3>
+    <div style="overflow:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr>
+            <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Usuario</th>
+            <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Desde</th>
+            <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Hasta</th>
+            <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Tipo</th>
+            <th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in pending %}
+          <tr>
+            <td style="padding:6px;">{{ a.user.email }}</td>
+            <td style="padding:6px;">{{ a.date_from.astimezone(TZ).strftime('%d/%m/%Y') if a.date_from.tzinfo else a.date_from.strftime('%d/%m/%Y') }}</td>
+            <td style="padding:6px;">{{ a.date_to.astimezone(TZ).strftime('%d/%m/%Y') if a.date_to.tzinfo else a.date_to.strftime('%d/%m/%Y') }}</td>
+            <td style="padding:6px;">{{ a.type|capitalize }}{% if a.subtype %} / {{ a.subtype|capitalize }}{% endif %}</td>
+            <td style="padding:6px;">
+              <form action="{{ url_for('absences_approve', abs_id=a.id) }}" method="post" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-small btn-green" type="submit">Aprobar</button>
+              </form>
+              <form action="{{ url_for('absences_reject', abs_id=a.id) }}" method="post" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-small btn-red" type="submit">Rechazar</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
