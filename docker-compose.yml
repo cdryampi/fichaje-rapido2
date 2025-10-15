@@ -6,12 +6,12 @@ services:
     ports:
       - "5000:5000"
     environment:
+      - SECRET_KEY=${SECRET_KEY:-supersecretkey123change}
+      - DATABASE_URL=sqlite:///fichaje.db
       - FLASK_ENV=production
-      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
-      - PORT=5000
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/login"]
       interval: 30s
       timeout: 10s
       retries: 3

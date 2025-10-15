@@ -4,25 +4,22 @@ FROM python:3.11-slim
 # Establece el directorio de trabajo
 WORKDIR /app
 
-# Instala dependencias del sistema necesarias para SQLite y build tools
+# Instala dependencias del sistema incluyendo curl para healthcheck
 RUN apt-get update && apt-get install -y \
     gcc \
     sqlite3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copia los archivos de requirements primero (mejor cache de Docker)
+# Copia requirements e instala dependencias
 COPY requirements.txt .
-
-# Crea el entorno virtual e instala las dependencias
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copia el resto de la aplicación
+# Copia toda la aplicación
 COPY . .
 
-# Crea el directorio para la base de datos si no existe
+# Crea directorio para la base de datos
 RUN mkdir -p /app/data
 
 # Variables de entorno
@@ -30,8 +27,11 @@ ENV FLASK_APP=app.py
 ENV PYTHONUNBUFFERED=1
 ENV PORT=5000
 
-# Expone el puerto
 EXPOSE 5000
 
-# Script de inicio que inicializa la BD y arranca gunicorn
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5000/login || exit 1
+
+# Comando de inicio
 CMD ["gunicorn", "--config", "gunicorn_config.py", "app:app"]
