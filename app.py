@@ -68,6 +68,15 @@ login_manager.login_view = "login"
 with app.app_context():
     init_db_with_demo()
 
+
+@app.context_processor
+def inject_template_globals():
+    return {
+        "current_year": datetime.now(TZ).year,
+        "owner_name": "Yampi",
+    }
+
+
 @login_manager.user_loader
 def load_user(user_id):
     db = SessionLocal()
