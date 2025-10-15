@@ -134,8 +134,13 @@ class GuestAccess(Base):
 
 
 def init_db_with_demo():
-    # Crear tablas nuevas y luego asegurar columnas nuevas en SQLite existente
-    Base.metadata.create_all(engine)
+    """Inicializa la base de datos y crea datos de demostración si no existen."""
+    try:
+        # Crear tablas nuevas y luego asegurar columnas nuevas en SQLite existente
+        Base.metadata.create_all(engine)
+    except Exception as e:
+        print(f"Advertencia al crear tablas: {e}")
+    
     # Migra columnas faltantes en SQLite (users.is_active, users.group_id, users.area_id)
     try:
         with engine.begin() as con:
@@ -146,48 +151,64 @@ def init_db_with_demo():
                 con.exec_driver_sql("ALTER TABLE users ADD COLUMN group_id INTEGER")
             if 'area_id' not in cols:
                 con.exec_driver_sql("ALTER TABLE users ADD COLUMN area_id INTEGER")
-    except Exception:
+    except Exception as e:
         # Si falla (no SQLite o ya migrado), seguimos
-        pass
+        print(f"Advertencia al migrar columnas: {e}")
+    
     db = SessionLocal()
-    # Seed más completo con RBAC si no hay áreas
-    if not db.query(Area).first():
-        area = Area(name="Area Demo")
-        db.add(area)
-        db.flush()
-        g1 = Group(name="Grupo A", area=area)
-        g2 = Group(name="Grupo B", area=area)
-        db.add_all([g1, g2])
-        db.flush()
+    try:
+        # Seed más completo con RBAC si no hay áreas
+        if not db.query(Area).first():
+            try:
+                area = Area(name="Area Demo")
+                db.add(area)
+                db.flush()
+                
+                g1 = Group(name="Grupo A", area=area)
+                g2 = Group(name="Grupo B", area=area)
+                db.add_all([g1, g2])
+                db.flush()
 
-        admin = User(email="admin@demo.local", name="Admin", role=Role.admin, area=area, group=g1)
-        admin.set_password("demo1234")
-        rrhh = User(email="rrhh@demo.local", name="RRHH", role=Role.rrhh, area=area, group=g1)
-        rrhh.set_password("demo1234")
-        cap = User(email="cap@demo.local", name="Cap Área", role=Role.cap_area, area=area, group=g1)
-        cap.set_password("demo1234")
-        resp = User(email="resp@demo.local", name="Responsable", role=Role.responsable, area=area, group=g1)
-        resp.set_password("demo1234")
-        emp1 = User(email="emp1@demo.local", name="Empleado 1", role=Role.employee, area=area, group=g1)
-        emp1.set_password("demo1234")
-        emp2 = User(email="emp2@demo.local", name="Empleado 2", role=Role.employee, area=area, group=g1)
-        emp2.set_password("demo1234")
-        emp3 = User(email="emp3@demo.local", name="Empleado 3", role=Role.employee, area=area, group=g2)
-        emp3.set_password("demo1234")
-        guest = User(email="guest@demo.local", name="Invitado", role=Role.invitado)
-        guest.set_password("demo1234")
-        # Evitar duplicado si ya existía el usuario legacy demo
-        legacy_demo = db.query(User).filter_by(email="demo@demo.local").first()
-        if not legacy_demo:
-            legacy_demo = User(email="demo@demo.local", name="Jaume", role=Role.admin, area=area, group=g1)
-            legacy_demo.set_password("demo1234")
-            db.add(legacy_demo)
-        db.add_all([admin, rrhh, cap, resp, emp1, emp2, emp3, guest])
-        db.flush()
+                admin = User(email="admin@demo.local", name="Admin", role=Role.admin, area=area, group=g1)
+                admin.set_password("demo1234")
+                rrhh = User(email="rrhh@demo.local", name="RRHH", role=Role.rrhh, area=area, group=g1)
+                rrhh.set_password("demo1234")
+                cap = User(email="cap@demo.local", name="Cap Área", role=Role.cap_area, area=area, group=g1)
+                cap.set_password("demo1234")
+                resp = User(email="resp@demo.local", name="Responsable", role=Role.responsable, area=area, group=g1)
+                resp.set_password("demo1234")
+                emp1 = User(email="emp1@demo.local", name="Empleado 1", role=Role.employee, area=area, group=g1)
+                emp1.set_password("demo1234")
+                emp2 = User(email="emp2@demo.local", name="Empleado 2", role=Role.employee, area=area, group=g1)
+                emp2.set_password("demo1234")
+                emp3 = User(email="emp3@demo.local", name="Empleado 3", role=Role.employee, area=area, group=g2)
+                emp3.set_password("demo1234")
+                guest = User(email="guest@demo.local", name="Invitado", role=Role.invitado)
+                guest.set_password("demo1234")
+                
+                # Evitar duplicado si ya existía el usuario legacy demo
+                legacy_demo = db.query(User).filter_by(email="demo@demo.local").first()
+                if not legacy_demo:
+                    legacy_demo = User(email="demo@demo.local", name="Jaume", role=Role.admin, area=area, group=g1)
+                    legacy_demo.set_password("demo1234")
+                    db.add(legacy_demo)
+                
+                db.add_all([admin, rrhh, cap, resp, emp1, emp2, emp3, guest])
+                db.flush()
 
-        db.add_all([
-            GuestAccess(guest_user_id=guest.id, target_user_id=emp1.id),
-            GuestAccess(guest_user_id=guest.id, target_user_id=emp2.id),
-        ])
-        db.commit()
-    db.close()
+                db.add_all([
+                    GuestAccess(guest_user_id=guest.id, target_user_id=emp1.id),
+                    GuestAccess(guest_user_id=guest.id, target_user_id=emp2.id),
+                ])
+                db.commit()
+                print("Base de datos inicializada con datos de demostración")
+            except Exception as e:
+                db.rollback()
+                print(f"Error al crear datos de demostración: {e}")
+                # Intentamos continuar aunque fallen los datos demo
+        else:
+            print("Base de datos ya inicializada")
+    except Exception as e:
+        print(f"Error al verificar base de datos: {e}")
+    finally:
+        db.close()
