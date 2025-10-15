@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from flask_login import UserMixin
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Enum, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Enum, Boolean, select
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, relationship
 from werkzeug.security import generate_password_hash, check_password_hash
 import enum
