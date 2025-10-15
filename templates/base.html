@@ -53,7 +53,7 @@
     .nav{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #ddd;border-radius:12px;padding:8px 10px;position:sticky;top:12px;z-index:5}
     .nav a{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;color:#111;text-decoration:none}
     .nav a:hover{background:#f5f5f5}
-    .nav .icon{width:18px;height:18px}
+    .nav .icon{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
     .main{flex:1}
     .footer{margin-top:32px;padding:16px 0;color:#666;text-align:center;font-size:14px}
     @media (min-width: 900px){
@@ -141,6 +141,16 @@
       {% endif %}
       <a href="{{ url_for('requests_page') }}"><i data-lucide="file-plus" class="icon"></i> Solicitudes</a>
       <a href="{{ url_for('info_page') }}"><i data-lucide="info" class="icon"></i> Informacion</a>
+      <a href="#" data-help-link>
+        <span class="icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" focusable="false" aria-hidden="true">
+            <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10Z" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <path d="M12 17h.01" />
+          </svg>
+        </span>
+        Ayuda
+      </a>
     </nav>
     {% endif %}
     <main class="main">
@@ -159,5 +169,50 @@
   <footer class="footer">
     &copy; {{ current_year }} {{ owner_name }}
   </footer>
+  <dialog id="help-dialog" class="modal" aria-labelledby="help-dialog-title">
+    <div class="modal-header">
+      <h2 id="help-dialog-title">Ayuda</h2>
+      <button type="button" class="btn btn-small" data-help-close>
+        <i data-lucide="x" class="icon"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p>
+        Aplicación web de fichaje rápido que registra entradas, salidas y pausas de empleados,
+        además de gestionar roles, permisos y accesos de invitados.
+      </p>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-green" data-help-close>Cerrar</button>
+    </div>
+  </dialog>
+  <script>
+    (function(){
+      function bindHelp(){
+        var helpLink = document.querySelector('[data-help-link]');
+        var dialog = document.getElementById('help-dialog');
+        if (!helpLink || !dialog) { return; }
+        var closers = dialog.querySelectorAll('[data-help-close]');
+        var summary = 'Aplicación web de fichaje rápido que registra entradas, salidas y pausas de empleados y gestiona roles, permisos y accesos de invitados.';
+        helpLink.addEventListener('click', function(event){
+          event.preventDefault();
+          if (typeof dialog.showModal === 'function') {
+            dialog.showModal();
+          } else {
+            window.alert(summary);
+          }
+        });
+        closers.forEach(function(btn){
+          btn.addEventListener('click', function(){ dialog.close(); });
+        });
+        dialog.addEventListener('cancel', function(){ dialog.close(); });
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindHelp);
+      } else {
+        bindHelp();
+      }
+    })();
+  </script>
 </body>
 </html>
