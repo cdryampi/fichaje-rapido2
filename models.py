@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from flask_login import UserMixin
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Enum, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Enum, Boolean, select
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, relationship
 from werkzeug.security import generate_password_hash, check_password_hash
 import enum
@@ -134,60 +134,141 @@ class GuestAccess(Base):
 
 
 def init_db_with_demo():
-    # Crear tablas nuevas y luego asegurar columnas nuevas en SQLite existente
-    Base.metadata.create_all(engine)
-    # Migra columnas faltantes en SQLite (users.is_active, users.group_id, users.area_id)
+    """Inicializa la base de datos y crea datos de demostración si no existen."""
+    print("Iniciando configuración de base de datos...")
+    
+    # 1. Crear tablas si no existen
+    try:
+        Base.metadata.create_all(engine)
+        print("✓ Tablas verificadas/creadas")
+    except Exception as e:
+        print(f"⚠ Advertencia al crear tablas: {e}")
+    
+    # 2. Migrar columnas faltantes en SQLite (solo si es necesario)
     try:
         with engine.begin() as con:
             cols = [r[1] for r in con.exec_driver_sql("PRAGMA table_info('users')").fetchall()]
+            migrated = []
             if 'is_active' not in cols:
                 con.exec_driver_sql("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1 NOT NULL")
+                migrated.append('is_active')
             if 'group_id' not in cols:
                 con.exec_driver_sql("ALTER TABLE users ADD COLUMN group_id INTEGER")
+                migrated.append('group_id')
             if 'area_id' not in cols:
                 con.exec_driver_sql("ALTER TABLE users ADD COLUMN area_id INTEGER")
-    except Exception:
-        # Si falla (no SQLite o ya migrado), seguimos
-        pass
+                migrated.append('area_id')
+            if migrated:
+                print(f"✓ Columnas migradas: {', '.join(migrated)}")
+    except Exception as e:
+        print(f"⚠ Advertencia al migrar columnas: {e}")
+    
+    # 3. Crear datos de demostración si NO existen
     db = SessionLocal()
-    # Seed más completo con RBAC si no hay áreas
-    if not db.query(Area).first():
+    try:
+        # IMPORTANTE: Verificar DENTRO de una transacción para evitar race conditions
+        existing_admin = db.execute(
+            select(User).where(User.email == "admin@demo.local")
+        ).scalar_one_or_none()
+        
+        if existing_admin:
+            print("✓ Base de datos ya inicializada")
+            db.close()
+            return
+        
+        # Intentar obtener o crear el área (manejo de race condition)
+        existing_area = db.execute(
+            select(Area).where(Area.name == "Area Demo")
+        ).scalar_one_or_none()
+        
+        if existing_area:
+            # Otro worker ya creó el área, verificamos si completó todo
+            print("✓ Área demo ya existe, verificando usuarios...")
+            existing_admin_check = db.execute(
+                select(User).where(User.email == "admin@demo.local")
+            ).scalar_one_or_none()
+            if existing_admin_check:
+                print("✓ Datos de demostración ya completos")
+                db.close()
+                return
+            # Si el área existe pero no el admin, puede ser race condition, salimos
+            print("⚠ Otro worker está inicializando, saliendo...")
+            db.close()
+            return
+        
+        # Si llegamos aquí, somos el primer worker, creamos todo
+        print("Creando datos de demostración...")
+        
+        # Crear área
         area = Area(name="Area Demo")
         db.add(area)
         db.flush()
+        
+        # Crear grupos
         g1 = Group(name="Grupo A", area=area)
         g2 = Group(name="Grupo B", area=area)
         db.add_all([g1, g2])
         db.flush()
-
-        admin = User(email="admin@demo.local", name="Admin", role=Role.admin, area=area, group=g1)
-        admin.set_password("demo1234")
-        rrhh = User(email="rrhh@demo.local", name="RRHH", role=Role.rrhh, area=area, group=g1)
-        rrhh.set_password("demo1234")
-        cap = User(email="cap@demo.local", name="Cap Área", role=Role.cap_area, area=area, group=g1)
-        cap.set_password("demo1234")
-        resp = User(email="resp@demo.local", name="Responsable", role=Role.responsable, area=area, group=g1)
-        resp.set_password("demo1234")
-        emp1 = User(email="emp1@demo.local", name="Empleado 1", role=Role.employee, area=area, group=g1)
-        emp1.set_password("demo1234")
-        emp2 = User(email="emp2@demo.local", name="Empleado 2", role=Role.employee, area=area, group=g1)
-        emp2.set_password("demo1234")
-        emp3 = User(email="emp3@demo.local", name="Empleado 3", role=Role.employee, area=area, group=g2)
-        emp3.set_password("demo1234")
-        guest = User(email="guest@demo.local", name="Invitado", role=Role.invitado)
+        
+        # Crear usuarios
+        users_to_create = [
+            ("admin@demo.local", "Admin", Role.admin, g1),
+            ("rrhh@demo.local", "RRHH", Role.rrhh, g1),
+            ("cap@demo.local", "Cap Área", Role.cap_area, g1),
+            ("resp@demo.local", "Responsable", Role.responsable, g1),
+            ("emp1@demo.local", "Empleado 1", Role.employee, g1),
+            ("emp2@demo.local", "Empleado 2", Role.employee, g1),
+            ("emp3@demo.local", "Empleado 3", Role.employee, g2),
+            ("demo@demo.local", "Jaume", Role.admin, g1),
+        ]
+        
+        created_users = []
+        for email, name, role, group in users_to_create:
+            u = User(
+                email=email,
+                name=name,
+                role=role,
+                area=area,
+                group=group,
+                is_active=True
+            )
+            u.set_password("demo1234")
+            db.add(u)
+            created_users.append(u)
+        
+        # Crear invitado (sin grupo)
+        guest = User(
+            email="guest@demo.local",
+            name="Invitado",
+            role=Role.invitado,
+            is_active=True
+        )
         guest.set_password("demo1234")
-        # Evitar duplicado si ya existía el usuario legacy demo
-        legacy_demo = db.query(User).filter_by(email="demo@demo.local").first()
-        if not legacy_demo:
-            legacy_demo = User(email="demo@demo.local", name="Jaume", role=Role.admin, area=area, group=g1)
-            legacy_demo.set_password("demo1234")
-            db.add(legacy_demo)
-        db.add_all([admin, rrhh, cap, resp, emp1, emp2, emp3, guest])
+        db.add(guest)
+        created_users.append(guest)
+        
         db.flush()
-
+        
+        # Crear accesos para invitado
+        guest_user = created_users[-1]
+        emp1_user = created_users[4]  # emp1@demo.local
+        emp2_user = created_users[5]  # emp2@demo.local
+        
         db.add_all([
-            GuestAccess(guest_user_id=guest.id, target_user_id=emp1.id),
-            GuestAccess(guest_user_id=guest.id, target_user_id=emp2.id),
+            GuestAccess(guest_user_id=guest_user.id, target_user_id=emp1_user.id),
+            GuestAccess(guest_user_id=guest_user.id, target_user_id=emp2_user.id),
         ])
+        
         db.commit()
-    db.close()
+        print(f"✓ Base de datos inicializada con {len(created_users)} usuarios de demostración")
+        print("  Credenciales: cualquier usuario con password 'demo1234'")
+        
+    except Exception as e:
+        db.rollback()
+        # Si falla por UNIQUE constraint, es porque otro worker ganó la carrera
+        if "UNIQUE constraint failed" in str(e):
+            print("⚠ Otro worker ya inicializó la BD (race condition detectada)")
+        else:
+            print(f"✗ Error al crear datos de demostración: {e}")
+    finally:
+        db.close()

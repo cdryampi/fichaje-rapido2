@@ -5,4 +5,5 @@ Werkzeug==3.0.4
 tzdata
 Flask-WTF
 Flask-Migrate
+gunicorn==21.2.0
 pytest
