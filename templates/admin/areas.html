@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Areas</h2>
+
+  <h3 style="margin-top:10px;">Crear nueva area</h3>
+  <form method="post" action="{{ url_for('admin_areas_create') }}" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="text" name="name" placeholder="Nombre del area" required>
+    <button class="btn" type="submit">Crear area</button>
+  </form>
+
+  <h3 class="row">Listado</h3>
+  <table style="width:100%; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">ID</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Nombre</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in areas %}
+      <tr>
+        <td style="padding:6px;">{{ a.id }}</td>
+        <td style="padding:6px;">
+          <form method="post" action="{{ url_for('admin_areas_update', area_id=a.id) }}" style="display:flex; gap:6px; align-items:center;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="name" value="{{ a.name }}" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
+            <button class="btn" type="submit">Guardar</button>
+          </form>
+        </td>
+        <td style="padding:6px;">
+          <form method="post" action="{{ url_for('admin_areas_delete', area_id=a.id) }}" onsubmit="return confirm('¿Borrar area?');" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn" type="submit">Eliminar</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" style="padding:6px;">Sin areas</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

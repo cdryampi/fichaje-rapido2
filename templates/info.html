@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Informacion</h2>
+  <div class="row">
+    <ul class="hist" style="width:100%">
+      <li>
+        <a href="{{ url_for('profile_page') }}" class="btn btn-hero btn-green" style="text-decoration:none; width:100%; justify-content:flex-start;">
+          <i data-lucide="user" class="icon"></i> Acceder a Mi perfil
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('time_info_page') }}" class="btn btn-hero btn-green" style="text-decoration:none; width:100%; justify-content:flex-start;">
+          <i data-lucide="clock" class="icon"></i> Acceder a Informacion de marcajes de tiempo
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('schedules_page') }}" class="btn btn-hero btn-green" style="text-decoration:none; width:100%; justify-content:flex-start;">
+          <i data-lucide="calendar" class="icon"></i> Acceder a Horarios
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('documents_page') }}" class="btn btn-hero btn-green" style="text-decoration:none; width:100%; justify-content:flex-start;">
+          <i data-lucide="file-text" class="icon"></i> Acceder a Mis documentos
+        </a>
+      </li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

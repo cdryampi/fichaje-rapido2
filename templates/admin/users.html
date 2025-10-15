@@ -5,13 +5,23 @@
 
   <h3 style="margin-top:10px;">Crear nuevo usuario</h3>
   <form method="post" action="{{ url_for('admin_users_create') }}" style="max-width:520px;">
-    {{ csrf_token() }}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="text" name="name" placeholder="Nombre" required>
     <input type="email" name="email" placeholder="Email" required>
     <input type="password" name="password" placeholder="Contraseña" required>
     <select name="role">
       <option value="employee">Empleado</option>
+      <option value="responsable">Responsable</option>
+      <option value="cap_area">Cap Área</option>
+      <option value="rrhh">RRHH</option>
       <option value="admin">Admin</option>
+      <option value="invitado">Invitado</option>
+    </select>
+    <select name="group_id">
+      <option value="">-- Grupo --</option>
+      {% for g in groups %}
+        <option value="{{ g.id }}">{{ g.name }}</option>
+      {% endfor %}
     </select>
     <button class="btn" type="submit">Crear</button>
   </form>
@@ -24,9 +34,9 @@
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Nombre</th>
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Email</th>
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Rol</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Grupo</th>
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Creado</th>
-<th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Acciones</th>
-
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Acciones</th>
       </tr>
     </thead>
     <tbody>
@@ -36,28 +46,41 @@
         <td style="padding:6px;">{{ u.name }}</td>
         <td style="padding:6px;">{{ u.email }}</td>
         <td style="padding:6px;">{{ u.role.value }}</td>
-        <td style="padding:6px;">{{ (u.created_at or '').strftime("%d/%m/%Y %H:%M") if u.created_at else "—" }}</td>
+        <td style="padding:6px;">{{ u.group.name if u.group else '-' }}</td>
+        <td style="padding:6px;">{{ (u.created_at or '').strftime('%d/%m/%Y %H:%M') if u.created_at else '-' }}</td>
         <td style="padding:6px;">
-            <!-- Reset contraseña -->
-            <form method="post" action="{{ url_for('admin_users_reset_password', user_id=u.id) }}" style="display:inline-flex; gap:6px; align-items:center;">
-              <input type="password" name="new_password" placeholder="Nueva pass" style="padding:6px;border:1px solid #ccc;border-radius:6px; width:130px;" required>
-              <button class="btn" type="submit">Reset</button>
-            </form>
-          
-            <!-- Cambiar rol -->
-            <form method="post" action="{{ url_for('admin_users_set_role', user_id=u.id) }}" style="display:inline-flex; gap:6px; align-items:center; margin-left:8px;">
-                {{ csrf_token() }}
-                <select name="role" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
-                <option value="employee" {{ 'selected' if u.role.value=='employee' else '' }}>Empleado</option>
-                <option value="admin" {{ 'selected' if u.role.value=='admin' else '' }}>Admin</option>
-              </select>
-              <button class="btn" type="submit">Actualizar</button>
-            </form>
-          </td>
-          
+          <form method="post" action="{{ url_for('admin_users_reset_password', user_id=u.id) }}" style="display:inline-flex; gap:6px; align-items:center;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="password" name="new_password" placeholder="Nueva contraseña" style="padding:6px;border:1px solid #ccc;border-radius:6px; width:130px;" required>
+            <button class="btn" type="submit">Reset</button>
+          </form>
+
+          <form method="post" action="{{ url_for('admin_users_set_role', user_id=u.id) }}" style="display:inline-flex; gap:6px; align-items:center; margin-left:8px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="role" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
+              <option value="employee" {{ 'selected' if u.role.value=='employee' else '' }}>Empleado</option>
+              <option value="responsable" {{ 'selected' if u.role.value=='responsable' else '' }}>Responsable</option>
+              <option value="cap_area" {{ 'selected' if u.role.value=='cap_area' else '' }}>Cap Área</option>
+              <option value="rrhh" {{ 'selected' if u.role.value=='rrhh' else '' }}>RRHH</option>
+              <option value="admin" {{ 'selected' if u.role.value=='admin' else '' }}>Admin</option>
+              <option value="invitado" {{ 'selected' if u.role.value=='invitado' else '' }}>Invitado</option>
+            </select>
+            <button class="btn" type="submit">Actualizar</button>
+          </form>
+
+          <form method="post" action="{{ url_for('admin_users_set_group', user_id=u.id) }}" style="display:inline-flex; gap:6px; align-items:center; margin-left:8px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="group_id" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
+              {% for g in groups %}
+                <option value="{{ g.id }}" {{ 'selected' if u.group_id==g.id else '' }}>{{ g.name }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn" type="submit">Cambiar grupo</button>
+          </form>
+        </td>
       </tr>
       {% else %}
-      <tr><td colspan="5" style="padding:6px;">Sin usuarios</td></tr>
+      <tr><td colspan="7" style="padding:6px;">Sin usuarios</td></tr>
       {% endfor %}
     </tbody>
   </table>

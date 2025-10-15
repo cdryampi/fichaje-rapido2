@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Grupos</h2>
+
+  <h3 style="margin-top:10px;">Crear nuevo grupo</h3>
+  <form method="post" action="{{ url_for('admin_groups_create') }}" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="text" name="name" placeholder="Nombre del grupo" required>
+    <select name="area_id">
+      {% for a in areas %}
+        <option value="{{ a.id }}">{{ a.name }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">Crear grupo</button>
+  </form>
+
+  <h3 class="row">Listado</h3>
+  <table style="width:100%; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">ID</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Nombre</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Area</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in groups %}
+      <tr>
+        <td style="padding:6px;">{{ g.id }}</td>
+        <td style="padding:6px;">
+          <form method="post" action="{{ url_for('admin_groups_update', group_id=g.id) }}" style="display:flex; gap:6px; align-items:center;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="name" value="{{ g.name }}" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
+            <select name="area_id" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
+              {% for a in areas %}
+                <option value="{{ a.id }}" {{ 'selected' if g.area_id==a.id else '' }}>{{ a.name }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn" type="submit">Guardar</button>
+          </form>
+        </td>
+        <td style="padding:6px;">{{ g.area.name if g.area else '-' }}</td>
+        <td style="padding:6px;">
+          <form method="post" action="{{ url_for('admin_groups_delete', group_id=g.id) }}" onsubmit="return confirm('¿Borrar grupo?');" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn" type="submit">Eliminar</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" style="padding:6px;">Sin grupos</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

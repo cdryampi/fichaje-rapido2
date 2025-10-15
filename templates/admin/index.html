@@ -1,0 +1,20 @@
+﻿{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Panel de administracion</h2>
+  <p class="muted">Selecciona una seccion para gestionar.</p>
+
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px;">
+    <a class="btn btn-hero btn-green" href="{{ url_for('admin_areas_page') }}" style="text-decoration:none;">
+      <i data-lucide="map-pin" class="icon"></i> Crear / gestionar areas ({{ areas_count }})
+    </a>
+    <a class="btn btn-hero btn-green" href="{{ url_for('admin_groups_page') }}" style="text-decoration:none;">
+      <i data-lucide="users" class="icon"></i> Crear / gestionar grupos ({{ groups_count }})
+    </a>
+    <a class="btn btn-hero btn-green" href="{{ url_for('admin_users') }}" style="text-decoration:none;">
+      <i data-lucide="user-plus" class="icon"></i> Crear nuevo usuario ({{ users_count }})
+    </a>
+  </div>
+</div>
+{% endblock %}
+
