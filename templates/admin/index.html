@@ -14,7 +14,46 @@
     <a class="btn btn-hero btn-green" href="{{ url_for('admin_users') }}" style="text-decoration:none;">
       <i data-lucide="user-plus" class="icon"></i> Crear nuevo usuario ({{ users_count }})
     </a>
+    <a class="btn btn-hero btn-green" href="#yampi" style="text-decoration:none;">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 2l2.09 6.26L20 9.27l-5 3.65 1.9 6.08L12 15.77 7.1 18.99 9 12.92 4 9.27l5.91-.99L12 2z" />
+        <circle cx="12" cy="12" r="2.5" />
+      </svg>
+      YAMPI
+    </a>
   </div>
 </div>
+
+<div class="card" id="yampi" style="margin-top:16px;">
+  <h3>Cuenta regresiva explosiva</h3>
+  <p class="muted">Prep&aacute;rate para el gran momento.</p>
+  <div id="countdown-wrapper" style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:12px;">
+    <div id="countdown-number" style="font-size:48px;font-weight:700;">10</div>
+    <div id="countdown-result" style="display:none;font-size:40px;font-weight:800;color:#e31b23;">BBBOOOMMM</div>
+    <img id="countdown-gif" src="https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif" alt="Bomba animada" style="display:none;max-width:220px;border-radius:12px;" />
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var count = 10;
+    var numberEl = document.getElementById('countdown-number');
+    var resultEl = document.getElementById('countdown-result');
+    var gifEl = document.getElementById('countdown-gif');
+
+    var interval = setInterval(function () {
+      count -= 1;
+      if (count >= 0) {
+        numberEl.textContent = count;
+      }
+      if (count < 0) {
+        clearInterval(interval);
+        numberEl.style.display = 'none';
+        resultEl.style.display = 'block';
+        gifEl.style.display = 'block';
+      }
+    }, 1000);
+  });
+</script>
 {% endblock %}
 
