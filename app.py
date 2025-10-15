@@ -52,8 +52,11 @@ def fmt_hm(seconds: int) -> str:
     m = (s % 3600) // 60
     return f"{sign}{h:02d}:{m:02d}"
 
+import os
+
 app = Flask(__name__)
-app.secret_key = "dev-secret-change-me"
+# Lee SECRET_KEY del entorno, usa valor por defecto en desarrollo
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
 from flask_wtf import CSRFProtect
 csrf = CSRFProtect(app)
