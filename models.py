@@ -16,6 +16,7 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 class Role(str, enum.Enum):
+    """Clase del rol"""
     employee = "employee"        # EMPLEADO
     responsable = "responsable"  # RESPONSABLE (grupo)
     cap_area = "cap_area"        # CAP_AREA (área)
