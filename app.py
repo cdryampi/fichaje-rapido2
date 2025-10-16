@@ -5,6 +5,7 @@ from rbac import can_view_user, can_edit_entries, require_view_user, require_edi
 from sqlalchemy import select, desc, func
 from functools import wraps
 from datetime import datetime, timezone
+from admin_panel import register_admin_panel
 
 # Zona horaria (con fallback si falta tzdata en Windows)
 try:
@@ -78,6 +79,7 @@ login_manager.login_view = "login"
 # Inicializa BD y usuario demo al arrancar
 with app.app_context():
     init_db_with_demo()
+    register_admin_panel(app)
 
 
 @app.context_processor
@@ -133,7 +135,13 @@ def login():
             test_users = db.execute(select(User).order_by(User.role, User.id)).scalars().all()
         finally:
             db.close()
-    return render_template("login.html", test_users=test_users, show_dev_login=show_dev_login)
+    # Cargar lista de usuarios para el select principal de login
+    db = SessionLocal()
+    try:
+        users_for_login = db.execute(select(User).order_by(User.name, User.email)).scalars().all()
+    finally:
+        db.close()
+    return render_template("login.html", users_for_login=users_for_login, test_users=test_users, show_dev_login=show_dev_login)
 
 @app.route("/logout", methods=["POST"])
 @login_required

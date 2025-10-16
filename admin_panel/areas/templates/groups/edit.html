@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  {% set back_href = back_url or url_for('admin_areas.list_areas') %}
+  <a href="{{ back_href }}" class="btn btn-link mb-3">&larr; Back</a>
+  <div class="card">
+    <div class="card-body">
+      <h2 class="card-title mb-3">{{ title or "Edit group" }}</h2>
+      <form method="post">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          {{ form.name.label(class="form-label") }}
+          {{ form.name(class="form-control", placeholder="Group name") }}
+          {% if form.name.errors %}
+          <div class="text-danger small mt-1">{{ form.name.errors[0] }}</div>
+          {% endif %}
+        </div>
+        <div class="mb-3">
+          {{ form.description.label(class="form-label") }}
+          {{ form.description(class="form-control", rows=3, placeholder="Short description (optional)") }}
+          {% if form.description.errors %}
+          <div class="text-danger small mt-1">{{ form.description.errors[0] }}</div>
+          {% endif %}
+        </div>
+        <div class="mb-3">
+          {{ form.area_id.label(class="form-label") }}
+          {{ form.area_id(class="form-select") }}
+          {% if form.area_id.errors %}
+          <div class="text-danger small mt-1">{{ form.area_id.errors[0] }}</div>
+          {% endif %}
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <a href="{{ back_href }}" class="btn btn-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

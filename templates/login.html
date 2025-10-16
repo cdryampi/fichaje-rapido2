@@ -4,7 +4,11 @@
   <h2>Entrar</h2>
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="email" name="email" placeholder="email" required value="demo@demo.local">
+    <select name="email" required style="padding:10px;border:1px solid #ccc;border-radius:8px;">
+      {% for u in users_for_login %}
+        <option value="{{ u.email }}">{{ u.name }} — {{ u.email }}</option>
+      {% endfor %}
+    </select>
     <input type="password" name="password" placeholder="contraseña" required value="demo1234">
     <button class="btn" type="submit">Acceder</button>
   </form>

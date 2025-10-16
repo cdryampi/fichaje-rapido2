@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <h2 class="mb-0">Work schedule policies</h2>
+    <a class="btn btn-primary" href="{{ url_for('admin_schedules.create_schedule') }}">New policy</a>
+  </div>
+
+  {% if policies %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Mode</th>
+          <th scope="col">Weekly hours</th>
+          <th scope="col">Start / End</th>
+          <th scope="col">Break</th>
+          <th scope="col">Margins</th>
+          <th scope="col">Days</th>
+          <th scope="col">Overtime</th>
+          <th scope="col" class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for policy in policies %}
+        <tr>
+          <td>
+            <strong>{{ policy.name }}</strong><br>
+            <small class="text-muted">{{ policy.description or "No description" }}</small>
+          </td>
+          <td>
+            <span class="badge bg-secondary text-uppercase">{{ policy.mode }}</span><br>
+            {% if policy.is_night_shift %}
+            <span class="badge bg-dark mt-1">Night shift</span>
+            {% endif %}
+            {% if policy.no_time_enforcement %}
+            <span class="badge bg-warning text-dark mt-1">No enforcement</span>
+            {% endif %}
+          </td>
+          <td>
+            {{ policy.expected_weekly_hours }} h<br>
+            {% if policy.min_daily_hours %}
+            <small class="text-muted">Min daily {{ policy.min_daily_hours }} h</small>
+            {% endif %}
+          </td>
+          <td>
+            {{ format_time(policy.start_time) }} - {{ format_time(policy.end_time) }}
+          </td>
+          <td>{{ policy.break_minutes }} min</td>
+          <td>
+            In: {{ policy.entry_margin_minutes }}'<br>
+            Out: {{ policy.exit_margin_minutes }}'
+            {% if policy.allow_early_entry %}
+            <br><span class="badge bg-info text-dark mt-1">Early entry</span>
+            {% endif %}
+            {% if policy.allow_late_exit %}
+            <br><span class="badge bg-info text-dark mt-1">Late exit</span>
+            {% endif %}
+          </td>
+          <td>{{ policy.working_days|replace(",", ", ") }}</td>
+          <td>
+            {% if policy.allow_overtime %}
+              <span class="badge bg-success">Yes</span><br>
+              <small class="text-muted">After {{ policy.overtime_after_minutes }} min</small>
+            {% else %}
+              <span class="badge bg-secondary">No</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_schedules.edit_schedule', policy_id=policy.id) }}">Edit</a>
+            <form method="post" action="{{ url_for('admin_schedules.delete_schedule', policy_id=policy.id) }}" class="d-inline" onsubmit="return confirm('Delete this policy?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-info" role="alert">
+    No work schedule policies defined yet. Create one to get started.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

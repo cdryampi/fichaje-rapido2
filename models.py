@@ -134,6 +134,18 @@ class GuestAccess(Base):
     guest_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     target_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
+# Import admin panel models so they are registered on shared metadata.
+for module in (
+    "admin_panel.roles.models",
+    "admin_panel.areas.models",
+    "admin_panel.employees.models",
+    "admin_panel.schedules.models",
+):
+    try:
+        __import__(module)
+    except ModuleNotFoundError:
+        pass
+
 
 def init_db_with_demo():
     """Inicializa la base de datos y crea datos de demostración si no existen."""

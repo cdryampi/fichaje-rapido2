@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <div>
+      <a href="{{ url_for('admin_areas.list_areas') }}" class="btn btn-link">&larr; Back to areas</a>
+      <h2 class="mb-0">Groups for {{ area.name }}</h2>
+    </div>
+    <a class="btn btn-primary" href="{{ url_for('admin_areas.create_group') }}?area_id={{ area.id }}">New group</a>
+  </div>
+
+  {% if groups %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Description</th>
+          <th scope="col" class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for group in groups %}
+        <tr>
+          <td>{{ group.name }}</td>
+          <td>{{ group.description or "-" }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_areas.edit_group', group_id=group.id) }}">Edit</a>
+            <form method="post" action="{{ url_for('admin_areas.delete_group', group_id=group.id) }}" class="d-inline" onsubmit="return confirm('Delete this group? Employees will be unassigned.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-info" role="alert">
+    This area has no groups yet.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

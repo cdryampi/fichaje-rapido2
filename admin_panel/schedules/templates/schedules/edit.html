@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  {% if current_lang == 'es' %}
+  <a href="{{ url_for('admin_schedules.list_schedules') }}" class="btn btn-link mb-3">&larr; Volver a las políticas</a>
+  {% else %}
+  <a href="{{ url_for('admin_schedules.list_schedules') }}" class="btn btn-link mb-3">&larr; Back to policies</a>
+  {% endif %}
+  <div class="card">
+    <div class="card-body">
+      <h2 class="card-title mb-3">{{ title }}</h2>
+      <div class="d-flex justify-content-end mb-3">
+        {% if current_lang == 'es' %}
+          <a class="btn btn-outline-secondary btn-sm" href="{{ request.path }}">Ver en inglés</a>
+        {% else %}
+          <a class="btn btn-outline-secondary btn-sm" href="{{ request.path }}?lang=es">Ver en castellano</a>
+        {% endif %}
+      </div>
+      <form method="post" action="{{ request.path }}{% if current_lang and current_lang != 'en' %}?lang={{ current_lang }}{% endif %}">
+        {{ form.hidden_tag() }}
+        <div class="row g-3">
+          <div class="col-md-6">
+            {{ form.name.label(class="form-label") }}
+            {{ form.name(class="form-control", placeholder="Policy name") }}
+            {% if form.name.errors %}
+            <div class="text-danger small mt-1">{{ form.name.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            {{ form.mode.label(class="form-label") }}
+            {{ form.mode(class="form-select") }}
+            {% if form.mode.errors %}
+            <div class="text-danger small mt-1">{{ form.mode.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4">
+            {{ form.expected_weekly_hours.label(class="form-label") }}
+            {{ form.expected_weekly_hours(class="form-control", step="0.25") }}
+            {% if form.expected_weekly_hours.errors %}
+            <div class="text-danger small mt-1">{{ form.expected_weekly_hours.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4">
+            {{ form.min_daily_hours.label(class="form-label") }}
+            {{ form.min_daily_hours(class="form-control", step="0.25") }}
+            {% if form.min_daily_hours.errors %}
+            <div class="text-danger small mt-1">{{ form.min_daily_hours.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4">
+            {{ form.break_minutes.label(class="form-label") }}
+            {{ form.break_minutes(class="form-control") }}
+            {% if form.break_minutes.errors %}
+            <div class="text-danger small mt-1">{{ form.break_minutes.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            {{ form.start_time.label(class="form-label") }}
+            {{ form.start_time(class="form-control") }}
+            {% if form.start_time.errors %}
+            <div class="text-danger small mt-1">{{ form.start_time.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            {{ form.end_time.label(class="form-label") }}
+            {{ form.end_time(class="form-control") }}
+            {% if form.end_time.errors %}
+            <div class="text-danger small mt-1">{{ form.end_time.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            {{ form.entry_margin_minutes.label(class="form-label") }}
+            {{ form.entry_margin_minutes(class="form-control") }}
+            {% if form.entry_margin_minutes.errors %}
+            <div class="text-danger small mt-1">{{ form.entry_margin_minutes.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            {{ form.exit_margin_minutes.label(class="form-label") }}
+            {{ form.exit_margin_minutes(class="form-control") }}
+            {% if form.exit_margin_minutes.errors %}
+            <div class="text-danger small mt-1">{{ form.exit_margin_minutes.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            {{ form.working_days.label(class="form-label") }}
+            {{ form.working_days(class="form-select", multiple=true, size=7) }}
+            {% if form.working_days.errors %}
+            <div class="text-danger small mt-1">{{ form.working_days.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            <div class="row g-3 mt-md-4">
+              <div class="col-md-6">
+                <div class="form-check form-switch">
+                  {{ form.allow_early_entry(class="form-check-input", id="allow-early") }}
+                  <label class="form-check-label" for="allow-early">{{ form.allow_early_entry.label.text }}</label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check form-switch">
+                  {{ form.allow_late_exit(class="form-check-input", id="allow-late") }}
+                  <label class="form-check-label" for="allow-late">{{ form.allow_late_exit.label.text }}</label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check form-switch">
+                  {{ form.no_time_enforcement(class="form-check-input", id="no-time") }}
+                  <label class="form-check-label" for="no-time">{{ form.no_time_enforcement.label.text }}</label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check form-switch">
+                  {{ form.is_night_shift(class="form-check-input", id="night-shift") }}
+                  <label class="form-check-label" for="night-shift">{{ form.is_night_shift.label.text }}</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="form-check form-switch mt-2">
+              {{ form.allow_overtime(class="form-check-input", id="allow-overtime") }}
+              <label class="form-check-label" for="allow-overtime">{{ form.allow_overtime.label.text }}</label>
+            </div>
+            <div class="mt-3">
+              {{ form.overtime_after_minutes.label(class="form-label") }}
+              {{ form.overtime_after_minutes(class="form-control", placeholder="e.g. 300") }}
+              {% if form.overtime_after_minutes.errors %}
+              <div class="text-danger small mt-1">{{ form.overtime_after_minutes.errors[0] }}</div>
+              {% endif %}
+              <small class="text-muted">Minutes before overtime applies.</small>
+            </div>
+          </div>
+          <div class="col-12">
+            {{ form.description.label(class="form-label") }}
+            {{ form.description(class="form-control", rows=3, placeholder="Optional notes about this policy") }}
+            {% if form.description.errors %}
+            <div class="text-danger small mt-1">{{ form.description.errors[0] }}</div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-primary">{{ 'Guardar' if current_lang == 'es' else 'Save' }}</button>
+          <a href="{{ url_for('admin_schedules.list_schedules') }}" class="btn btn-secondary">{{ 'Cancelar' if current_lang == 'es' else 'Cancel' }}</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

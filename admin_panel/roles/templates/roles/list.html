@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Roles</h2>
+    <a class="btn btn-primary" href="{{ url_for('admin_roles.create_role') }}">Create role</a>
+  </div>
+
+  {% if roles %}
+  <div class="table-responsive">
+    <table class="table table-striped table-bordered align-middle">
+      <thead class="table-light">
+        <tr>
+          <th scope="col">#</th>
+          <th scope="col">Name</th>
+          <th scope="col">Description</th>
+          <th scope="col" class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for role in roles %}
+        <tr>
+          <td>{{ role.id }}</td>
+          <td>{{ role.name }}</td>
+          <td>{{ role.description or "-" }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_roles.edit_role', role_id=role.id) }}">Edit</a>
+            <form class="d-inline" method="post" action="{{ url_for('admin_roles.delete_role', role_id=role.id) }}" onsubmit="return confirm('Delete this role?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-info" role="alert">
+    No roles available yet.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
