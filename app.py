@@ -1,6 +1,18 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from models import SessionLocal, init_db_with_demo, User, Attendance, AttendanceAction, Role, Pause, TimeEntry, EntryStatus, Group, Area
+from models import (
+    SessionLocal,
+    init_db_with_demo,
+    User,
+    Attendance,
+    AttendanceAction,
+    Role,
+    Pause,
+    TimeEntry,
+    EntryStatus,
+    Group,
+    Area,
+)
 from rbac import can_view_user, can_edit_entries, require_view_user, require_edit_entry
 from sqlalchemy import select, desc, func
 from functools import wraps
