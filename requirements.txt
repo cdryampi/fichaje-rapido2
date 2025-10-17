@@ -4,6 +4,7 @@ SQLAlchemy==2.0.36
 Werkzeug==3.0.4
 tzdata
 Flask-WTF
+email-validator
 Flask-Migrate
 gunicorn==21.2.0
 pytest
