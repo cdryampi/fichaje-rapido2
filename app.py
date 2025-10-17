@@ -121,6 +121,15 @@ def admin_required(view):
         return view(*args, **kwargs)
     return wrapper
 
+
+def admin_or_rrhh_required(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role not in (Role.admin, Role.rrhh):
+            abort(403)
+        return view(*args, **kwargs)
+    return wrapper
+
 # ---------- RUTAS ----------
 
 @app.route("/login", methods=["GET", "POST"])
@@ -329,19 +338,48 @@ def admin_users():
     try:
         users = db.execute(select(User).order_by(User.id)).scalars().all()
         groups = db.execute(select(Group).order_by(Group.id)).scalars().all()
-        return render_template("admin/users.html", users=users, groups=groups)
+        areas = db.execute(select(Area).order_by(Area.name)).scalars().all()
+        supervisors = (
+            db.execute(
+                select(User)
+                .where(User.is_active.is_(True), User.role.in_((Role.responsable, Role.cap_area, Role.rrhh, Role.admin)))
+                .order_by(User.name.asc())
+            )
+            .scalars()
+            .all()
+        )
+        return render_template(
+            "admin/users.html",
+            users=users,
+            groups=groups,
+            areas=areas,
+            supervisors=supervisors,
+        )
     finally:
         db.close()
 
 
 @app.route("/admin/areas", methods=["GET"])
 @login_required
-@admin_required
+@admin_or_rrhh_required
 def admin_areas_page():
     db = SessionLocal()
     try:
         areas = db.execute(select(Area).order_by(Area.id)).scalars().all()
-        return render_template("admin/areas.html", areas=areas)
+        manager_candidates = (
+            db.execute(
+                select(User)
+                .where(User.is_active.is_(True), User.role.in_((Role.cap_area, Role.responsable, Role.rrhh, Role.admin)))
+                .order_by(User.name.asc())
+            )
+            .scalars()
+            .all()
+        )
+        return render_template(
+            "admin/areas.html",
+            areas=areas,
+            managers=manager_candidates,
+        )
     finally:
         db.close()
 
@@ -376,6 +414,8 @@ def admin_users_create():
     except Exception:
         role = Role.employee
     group_id = request.form.get("group_id")
+    area_id = request.form.get("area_id")
+    supervisor_id = request.form.get("supervisor_id")
 
     db = SessionLocal()
     try:
@@ -392,6 +432,22 @@ def admin_users_create():
                 if g:
                     u.group_id = g.id
                     u.area_id = g.area_id
+            except Exception:
+                pass
+        elif area_id:
+            try:
+                aid = int(area_id)
+                area = db.get(Area, aid)
+                if area:
+                    u.area_id = area.id
+            except Exception:
+                pass
+        if supervisor_id:
+            try:
+                sid = int(supervisor_id)
+                supervisor = db.get(User, sid)
+                if supervisor and supervisor.id != u.id:
+                    u.supervisor_id = supervisor.id
             except Exception:
                 pass
         u.set_password(password)
@@ -465,16 +521,88 @@ def admin_users_set_group(user_id):
             flash("Usuario no encontrado.", "error")
             return redirect(url_for("admin_users"))
         if not group_id:
-            flash("Grupo inválido.", "error")
-            return redirect(url_for("admin_users"))
-        g = db.get(Group, int(group_id))
-        if not g:
-            flash("Grupo no encontrado.", "error")
-            return redirect(url_for("admin_users"))
-        u.group_id = g.id
-        u.area_id = g.area_id
+            u.group_id = None
+            group_name = "sin grupo"
+        else:
+            try:
+                g = db.get(Group, int(group_id))
+            except Exception:
+                g = None
+            if not g:
+                flash("Grupo no encontrado.", "error")
+                return redirect(url_for("admin_users"))
+            u.group_id = g.id
+            u.area_id = g.area_id
+            group_name = g.name
         db.commit()
-        flash(f"Grupo de {u.email} actualizado a {g.name}.", "ok")
+        flash(f"Grupo de {u.email} actualizado a {group_name}.", "ok")
+        return redirect(url_for("admin_users"))
+    finally:
+        db.close()
+
+
+@app.route("/admin/users/<int:user_id>/set_area", methods=["POST"])
+@login_required
+@admin_required
+def admin_users_set_area(user_id):
+    area_id = request.form.get("area_id")
+    db = SessionLocal()
+    try:
+        u = db.get(User, user_id)
+        if not u:
+            flash("Usuario no encontrado.", "error")
+            return redirect(url_for("admin_users"))
+        if not area_id:
+            u.area_id = None
+            area_name = "sin área"
+        else:
+            try:
+                a = db.get(Area, int(area_id))
+            except Exception:
+                a = None
+            if not a:
+                flash("Área no encontrada.", "error")
+                return redirect(url_for("admin_users"))
+            u.area_id = a.id
+            area_name = a.name
+        db.commit()
+        flash(f"Área de {u.email} actualizada a {area_name}.", "ok")
+        return redirect(url_for("admin_users"))
+    finally:
+        db.close()
+
+
+@app.route("/admin/users/<int:user_id>/set_supervisor", methods=["POST"])
+@login_required
+@admin_required
+def admin_users_set_supervisor(user_id):
+    supervisor_id = (request.form.get("supervisor_id") or "").strip()
+    db = SessionLocal()
+    try:
+        u = db.get(User, user_id)
+        if not u:
+            flash("Usuario no encontrado.", "error")
+            return redirect(url_for("admin_users"))
+        if not supervisor_id:
+            u.supervisor_id = None
+            db.commit()
+            flash(f"Supervisor de {u.email} eliminado.", "ok")
+            return redirect(url_for("admin_users"))
+        try:
+            sid = int(supervisor_id)
+        except Exception:
+            flash("Supervisor inválido.", "error")
+            return redirect(url_for("admin_users"))
+        if sid == u.id:
+            flash("Un usuario no puede ser su propio superior.", "error")
+            return redirect(url_for("admin_users"))
+        supervisor = db.get(User, sid)
+        if not supervisor:
+            flash("Supervisor no encontrado.", "error")
+            return redirect(url_for("admin_users"))
+        u.supervisor_id = supervisor.id
+        db.commit()
+        flash(f"Supervisor de {u.email} actualizado a {supervisor.name}.", "ok")
         return redirect(url_for("admin_users"))
     finally:
         db.close()
@@ -562,9 +690,10 @@ def admin_groups_delete(group_id):
 
 @app.route("/admin/areas/create", methods=["POST"])
 @login_required
-@admin_required
+@admin_or_rrhh_required
 def admin_areas_create():
     name = request.form.get("name", "").strip()
+    manager_id_raw = (request.form.get("manager_id") or "").strip()
     if not name:
         flash("El nombre del área es obligatorio.", "error")
         return redirect(url_for("admin_areas_page"))
@@ -574,8 +703,21 @@ def admin_areas_create():
             flash("Ya existe un área con ese nombre.", "error")
             return redirect(url_for("admin_users"))
         a = Area(name=name)
+        if manager_id_raw:
+            try:
+                manager = db.get(User, int(manager_id_raw))
+                if manager:
+                    a.manager_id = manager.id
+            except Exception:
+                flash("Responsable de área inválido.", "error")
+                return redirect(url_for("admin_areas_page"))
         db.add(a)
         db.commit()
+        if a.manager_id:
+            manager = db.get(User, a.manager_id)
+            if manager and manager.area_id != a.id:
+                manager.area_id = a.id
+                db.commit()
         flash("Área creada.", "ok")
     finally:
         db.close()
@@ -584,9 +726,10 @@ def admin_areas_create():
 
 @app.route("/admin/areas/<int:area_id>/update", methods=["POST"])
 @login_required
-@admin_required
+@admin_or_rrhh_required
 def admin_areas_update(area_id):
     name = request.form.get("name", "").strip()
+    manager_id_raw = (request.form.get("manager_id") or "").strip()
     db = SessionLocal()
     try:
         a = db.get(Area, area_id)
@@ -595,6 +738,19 @@ def admin_areas_update(area_id):
             return redirect(url_for("admin_areas_page"))
         if name:
             a.name = name
+        if manager_id_raw == "":
+            a.manager_id = None
+        elif manager_id_raw:
+            try:
+                manager = db.get(User, int(manager_id_raw))
+            except Exception:
+                manager = None
+            if not manager:
+                flash("Responsable de área inválido.", "error")
+                return redirect(url_for("admin_areas_page"))
+            a.manager_id = manager.id
+            if manager.area_id != a.id:
+                manager.area_id = a.id
         db.commit()
         flash("Área actualizada.", "ok")
     finally:
@@ -604,7 +760,7 @@ def admin_areas_update(area_id):
 
 @app.route("/admin/areas/<int:area_id>/delete", methods=["POST"])
 @login_required
-@admin_required
+@admin_or_rrhh_required
 def admin_areas_delete(area_id):
     db = SessionLocal()
     try:
@@ -633,25 +789,38 @@ def entries_list():
     db = SessionLocal()
     try:
         q = select(TimeEntry)
+        allowed_user_ids = None
         if current_user.role == Role.employee:
-            q = q.where(TimeEntry.user_id == current_user.id)
+            allowed_user_ids = {current_user.id}
         elif current_user.role == Role.responsable:
-            group_id = current_user.group_id
-            if group_id:
-                q = q.where(TimeEntry.user_id.in_(select(User.id).where(User.group_id == group_id)))
-            else:
-                q = q.where(TimeEntry.user_id == -1)
+            allowed_user_ids = set()
+            if current_user.group_id:
+                allowed_user_ids.update(
+                    db.execute(select(User.id).where(User.group_id == current_user.group_id)).scalars().all()
+                )
         elif current_user.role == Role.cap_area:
-            area_id = current_user.area_id
-            if area_id:
-                q = q.where(TimeEntry.user_id.in_(select(User.id).where(User.area_id == area_id)))
-            else:
-                q = q.where(TimeEntry.user_id == -1)
+            allowed_user_ids = set()
+            if current_user.area_id:
+                allowed_user_ids.update(
+                    db.execute(select(User.id).where(User.area_id == current_user.area_id)).scalars().all()
+                )
         elif current_user.role in (Role.rrhh, Role.admin):
-            pass
+            allowed_user_ids = None
         elif current_user.role == Role.invitado:
             from models import GuestAccess
             q = q.where(TimeEntry.user_id.in_(select(GuestAccess.target_user_id).where(GuestAccess.guest_user_id == current_user.id)))
+        else:
+            allowed_user_ids = {current_user.id}
+
+        if allowed_user_ids is not None:
+            direct_reports = db.execute(
+                select(User.id).where(User.supervisor_id == current_user.id)
+            ).scalars().all()
+            allowed_user_ids.update(direct_reports)
+            if allowed_user_ids:
+                q = q.where(TimeEntry.user_id.in_(list(allowed_user_ids)))
+            else:
+                q = q.where(TimeEntry.user_id == -1)
 
         rows = db.execute(q.order_by(TimeEntry.id.desc())).scalars().all()
         entries = [
@@ -706,7 +875,15 @@ def requests_page():
 from models import Absence, EntryStatus
 
 def _is_approver_for(approver: User, target: User) -> bool:
-    return approver.can_validate_request_for(target)
+    if approver.role in (Role.admin, Role.rrhh):
+        return True
+    if target.supervisor_id and target.supervisor_id == approver.id:
+        return True
+    if approver.role == Role.responsable:
+        return approver.group_id and approver.group_id == target.group_id
+    if approver.role == Role.cap_area:
+        return approver.area_id and approver.area_id == target.area_id
+    return False
 
 
 @app.route("/absences", methods=["GET"])
@@ -718,34 +895,25 @@ def absences_page():
 
         pending_for_me = []
         if current_user.role in (Role.admin, Role.rrhh, Role.responsable, Role.cap_area):
+            user_ids = set()
             if current_user.role in (Role.admin, Role.rrhh):
-                pending_query = select(Absence).where(Absence.status == EntryStatus.pending)
-            else:
-                candidate_ids = set(
-                    db.execute(
-                        select(User.id).where(User.responsible_id == current_user.id)
-                    ).scalars().all()
+                user_ids.update(db.execute(select(User.id)).scalars().all())
+            elif current_user.role == Role.responsable and current_user.group_id:
+                user_ids.update(
+                    db.execute(select(User.id).where(User.group_id == current_user.group_id)).scalars().all()
                 )
-                area_ids = set(
-                    db.execute(select(Area.id).where(Area.cap_id == current_user.id)).scalars().all()
+            elif current_user.role == Role.cap_area and current_user.area_id:
+                user_ids.update(
+                    db.execute(select(User.id).where(User.area_id == current_user.area_id)).scalars().all()
                 )
-                if current_user.role == Role.cap_area and current_user.area_id:
-                    area_ids.add(current_user.area_id)
-                if area_ids:
-                    area_user_ids = db.execute(
-                        select(User.id).where(User.area_id.in_(area_ids))
-                    ).scalars().all()
-                    candidate_ids.update(area_user_ids)
-                if candidate_ids:
-                    pending_query = select(Absence).where(
-                        Absence.status == EntryStatus.pending,
-                        Absence.user_id.in_(candidate_ids),
-                    )
-                else:
-                    pending_query = None
-            if pending_query is not None:
-                pending_records = db.execute(
-                    pending_query.order_by(Absence.date_from.desc())
+            user_ids.update(
+                db.execute(select(User.id).where(User.supervisor_id == current_user.id)).scalars().all()
+            )
+            if user_ids:
+                pending_for_me = db.execute(
+                    select(Absence)
+                    .where(Absence.user_id.in_(list(user_ids)), Absence.status == EntryStatus.pending)
+                    .order_by(Absence.date_from.desc())
                 ).scalars().all()
                 pending_for_me = [
                     absence

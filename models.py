@@ -50,27 +50,27 @@ class User(Base, UserMixin):
     is_active = Column(Boolean, default=True, nullable=False)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=True)
-    responsible_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    supervisor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     attendances = relationship("Attendance", back_populates="user")
     group = relationship("Group", back_populates="users")
     area = relationship("Area", back_populates="users", foreign_keys=[area_id])
-    responsible = relationship(
+    managed_areas = relationship(
+        "Area",
+        back_populates="manager",
+        foreign_keys="Area.manager_id",
+    )
+    supervisor = relationship(
         "User",
         remote_side="User.id",
-        foreign_keys=[responsible_id],
         back_populates="direct_reports",
+        foreign_keys="User.supervisor_id",
     )
     direct_reports = relationship(
         "User",
-        foreign_keys="User.responsible_id",
-        back_populates="responsible",
-    )
-    areas_led = relationship(
-        "Area",
-        foreign_keys="Area.cap_id",
-        back_populates="cap",
+        back_populates="supervisor",
+        foreign_keys="User.supervisor_id",
     )
 
     def set_password(self, raw):
@@ -126,10 +126,14 @@ class Area(Base):
     __tablename__ = "areas"
     id = Column(Integer, primary_key=True)
     name = Column(String(120), nullable=False, unique=True)
-    cap_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     users = relationship("User", back_populates="area", foreign_keys="User.area_id")
     groups = relationship("Group", back_populates="area")
-    cap = relationship("User", foreign_keys=[cap_id], back_populates="areas_led")
+    manager = relationship(
+        "User",
+        back_populates="managed_areas",
+        foreign_keys=[manager_id],
+    )
 
 
 class Group(Base):
@@ -234,9 +238,9 @@ def init_db_with_demo():
             if 'area_id' not in cols:
                 con.exec_driver_sql("ALTER TABLE users ADD COLUMN area_id INTEGER")
                 migrated.append('area_id')
-            if 'responsible_id' not in cols:
-                con.exec_driver_sql("ALTER TABLE users ADD COLUMN responsible_id INTEGER")
-                migrated.append('responsible_id')
+            if 'supervisor_id' not in cols:
+                con.exec_driver_sql("ALTER TABLE users ADD COLUMN supervisor_id INTEGER")
+                migrated.append('supervisor_id')
             # Ensure 'subtype' column exists on 'absences'
             try:
                 abs_cols = [r[1] for r in con.exec_driver_sql("PRAGMA table_info('absences')").fetchall()]
@@ -245,12 +249,11 @@ def init_db_with_demo():
                     print("✔ Columna 'subtype' agregada a 'absences'")
             except Exception as e:
                 print(f"⚠ Advertencia al migrar 'absences.subtype': {e}")
-            area_cols = [
-                r[1] for r in con.exec_driver_sql("PRAGMA table_info('areas')").fetchall()
-            ]
-            if 'cap_id' not in area_cols:
-                con.exec_driver_sql("ALTER TABLE areas ADD COLUMN cap_id INTEGER")
-                migrated.append('areas.cap_id')
+            # Ensure manager column exists on areas
+            area_cols = [r[1] for r in con.exec_driver_sql("PRAGMA table_info('areas')").fetchall()]
+            if 'manager_id' not in area_cols:
+                con.exec_driver_sql("ALTER TABLE areas ADD COLUMN manager_id INTEGER")
+                migrated.append('areas.manager_id')
             if migrated:
                 print(f"✓ Columnas migradas: {', '.join(migrated)}")
     except Exception as e:
@@ -328,7 +331,7 @@ def init_db_with_demo():
             u.set_password("demo1234")
             db.add(u)
             created_users.append(u)
-        
+
         # Crear invitado (sin grupo)
         guest = User(
             email="guest@demo.local",
@@ -339,9 +342,21 @@ def init_db_with_demo():
         guest.set_password("demo1234")
         db.add(guest)
         created_users.append(guest)
-        
+
         db.flush()
-        
+
+        # Asignar jerarquías de ejemplo
+        users_by_email = {u.email: u for u in created_users}
+        area.manager_id = users_by_email.get("cap@demo.local").id if users_by_email.get("cap@demo.local") else None
+        responsable = users_by_email.get("resp@demo.local")
+        cap_area_user = users_by_email.get("cap@demo.local")
+        if responsable and cap_area_user:
+            responsable.supervisor_id = cap_area_user.id
+        for email in ("emp1@demo.local", "emp2@demo.local", "emp3@demo.local"):
+            employee = users_by_email.get(email)
+            if employee and responsable:
+                employee.supervisor_id = responsable.id
+
         # Crear accesos para invitado
         guest_user = created_users[-1]
         emp1_user = created_users[4]  # emp1@demo.local

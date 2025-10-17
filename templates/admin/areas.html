@@ -7,6 +7,12 @@
   <form method="post" action="{{ url_for('admin_areas_create') }}" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="text" name="name" placeholder="Nombre del area" required>
+    <select name="manager_id" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
+      <option value="">-- Jefe de área --</option>
+      {% for manager in managers %}
+        <option value="{{ manager.id }}">{{ manager.name }} ({{ manager.role.value }})</option>
+      {% endfor %}
+    </select>
     <button class="btn" type="submit">Crear area</button>
   </form>
 
@@ -15,7 +21,7 @@
     <thead>
       <tr>
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">ID</th>
-        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Nombre</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Nombre y jefe</th>
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Acciones</th>
       </tr>
     </thead>
@@ -24,9 +30,15 @@
       <tr>
         <td style="padding:6px;">{{ a.id }}</td>
         <td style="padding:6px;">
-          <form method="post" action="{{ url_for('admin_areas_update', area_id=a.id) }}" style="display:flex; gap:6px; align-items:center;">
+          <form method="post" action="{{ url_for('admin_areas_update', area_id=a.id) }}" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="text" name="name" value="{{ a.name }}" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
+            <select name="manager_id" style="padding:6px;border:1px solid #ccc;border-radius:6px; min-width:200px;">
+              <option value="">Sin jefe</option>
+              {% for manager in managers %}
+                <option value="{{ manager.id }}" {{ 'selected' if a.manager_id==manager.id else '' }}>{{ manager.name }} ({{ manager.role.value }})</option>
+              {% endfor %}
+            </select>
             <button class="btn" type="submit">Guardar</button>
           </form>
         </td>
