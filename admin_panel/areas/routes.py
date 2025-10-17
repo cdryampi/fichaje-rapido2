@@ -26,7 +26,7 @@ def ensure_admin_access():
     if not current_user.is_authenticated:
         login_manager = current_app.login_manager
         return login_manager.unauthorized()
-    if current_user.role != UserRole.admin:
+    if current_user.role not in (UserRole.admin, UserRole.rrhh):
         abort(403)
 
 
