@@ -1,6 +1,18 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from models import SessionLocal, init_db_with_demo, User, Attendance, AttendanceAction, Role, Pause, TimeEntry, EntryStatus, Group, Area
+from models import (
+    SessionLocal,
+    init_db_with_demo,
+    User,
+    Attendance,
+    AttendanceAction,
+    Role,
+    Pause,
+    TimeEntry,
+    EntryStatus,
+    Group,
+    Area,
+)
 from rbac import can_view_user, can_edit_entries, require_view_user, require_edit_entry
 from sqlalchemy import select, desc, func
 from functools import wraps
@@ -903,6 +915,11 @@ def absences_page():
                     .where(Absence.user_id.in_(list(user_ids)), Absence.status == EntryStatus.pending)
                     .order_by(Absence.date_from.desc())
                 ).scalars().all()
+                pending_for_me = [
+                    absence
+                    for absence in pending_records
+                    if absence.can_be_validated_by(current_user)
+                ]
 
         return render_template("absences.html", mine=mine, pending=pending_for_me)
     finally:
@@ -945,8 +962,7 @@ def absences_approve(abs_id):
         a = db.get(Absence, abs_id)
         if not a:
             abort(404)
-        u = db.get(User, a.user_id)
-        if not _is_approver_for(current_user, u):
+        if not a.can_be_validated_by(current_user):
             abort(403)
         a.status = EntryStatus.approved
         db.commit()
@@ -964,8 +980,7 @@ def absences_reject(abs_id):
         a = db.get(Absence, abs_id)
         if not a:
             abort(404)
-        u = db.get(User, a.user_id)
-        if not _is_approver_for(current_user, u):
+        if not a.can_be_validated_by(current_user):
             abort(403)
         a.status = EntryStatus.rejected
         db.commit()

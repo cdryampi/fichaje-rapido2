@@ -1,7 +1,17 @@
 from datetime import datetime, timezone
 from flask_login import UserMixin
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Enum, Boolean, select
-from sqlalchemy.orm import DeclarativeBase, sessionmaker, relationship
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    create_engine,
+    select,
+)
+from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 from werkzeug.security import generate_password_hash, check_password_hash
 import enum
 import os
@@ -68,6 +78,27 @@ class User(Base, UserMixin):
 
     def check_password(self, raw):
         return check_password_hash(self.password_hash, raw)
+
+    def can_validate_request_for(self, target: "User") -> bool:
+        """Return True when the user can validate a request for the target user."""
+
+        if not target or not self.is_active:
+            return False
+
+        if self.role in (Role.admin, Role.rrhh):
+            return True
+
+        if target.responsible_id and target.responsible_id == self.id:
+            return True
+
+        # Area heads can validate requests in their area regardless of direct responsibility.
+        if self.role == Role.cap_area and self.area_id and target.area_id == self.area_id:
+            return True
+
+        if target.area and target.area.cap_id and target.area.cap_id == self.id:
+            return True
+
+        return False
 
 
 class Attendance(Base):
@@ -149,6 +180,18 @@ class Absence(Base):
     status = Column(Enum(EntryStatus), default=EntryStatus.pending, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     user = relationship("User")
+
+    def can_be_validated_by(self, user: User) -> bool:
+        """Return True when the given user can validate this absence."""
+
+        if not user:
+            return False
+
+        requester = self.user
+        if requester is None:
+            return False
+
+        return user.can_validate_request_for(requester)
 
 
 class GuestAccess(Base):
