@@ -1,7 +1,17 @@
 from datetime import datetime, timezone
 from flask_login import UserMixin
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Enum, Boolean, select
-from sqlalchemy.orm import DeclarativeBase, sessionmaker, relationship
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    create_engine,
+    select,
+)
+from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 from werkzeug.security import generate_password_hash, check_password_hash
 import enum
 import os
@@ -40,17 +50,55 @@ class User(Base, UserMixin):
     is_active = Column(Boolean, default=True, nullable=False)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=True)
+    responsible_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     attendances = relationship("Attendance", back_populates="user")
     group = relationship("Group", back_populates="users")
-    area = relationship("Area", back_populates="users")
+    area = relationship("Area", back_populates="users", foreign_keys=[area_id])
+    responsible = relationship(
+        "User",
+        remote_side="User.id",
+        foreign_keys=[responsible_id],
+        back_populates="direct_reports",
+    )
+    direct_reports = relationship(
+        "User",
+        foreign_keys="User.responsible_id",
+        back_populates="responsible",
+    )
+    areas_led = relationship(
+        "Area",
+        foreign_keys="Area.cap_id",
+        back_populates="cap",
+    )
 
     def set_password(self, raw):
         self.password_hash = generate_password_hash(raw)
 
     def check_password(self, raw):
         return check_password_hash(self.password_hash, raw)
+
+    def can_validate_request_for(self, target: "User") -> bool:
+        """Return True when the user can validate a request for the target user."""
+
+        if not target or not self.is_active:
+            return False
+
+        if self.role in (Role.admin, Role.rrhh):
+            return True
+
+        if target.responsible_id and target.responsible_id == self.id:
+            return True
+
+        # Area heads can validate requests in their area regardless of direct responsibility.
+        if self.role == Role.cap_area and self.area_id and target.area_id == self.area_id:
+            return True
+
+        if target.area and target.area.cap_id and target.area.cap_id == self.id:
+            return True
+
+        return False
 
 
 class Attendance(Base):
@@ -78,8 +126,10 @@ class Area(Base):
     __tablename__ = "areas"
     id = Column(Integer, primary_key=True)
     name = Column(String(120), nullable=False, unique=True)
-    users = relationship("User", back_populates="area")
+    cap_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    users = relationship("User", back_populates="area", foreign_keys="User.area_id")
     groups = relationship("Group", back_populates="area")
+    cap = relationship("User", foreign_keys=[cap_id], back_populates="areas_led")
 
 
 class Group(Base):
@@ -127,6 +177,18 @@ class Absence(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     user = relationship("User")
 
+    def can_be_validated_by(self, user: User) -> bool:
+        """Return True when the given user can validate this absence."""
+
+        if not user:
+            return False
+
+        requester = self.user
+        if requester is None:
+            return False
+
+        return user.can_validate_request_for(requester)
+
 
 class GuestAccess(Base):
     __tablename__ = "guest_access"
@@ -172,6 +234,9 @@ def init_db_with_demo():
             if 'area_id' not in cols:
                 con.exec_driver_sql("ALTER TABLE users ADD COLUMN area_id INTEGER")
                 migrated.append('area_id')
+            if 'responsible_id' not in cols:
+                con.exec_driver_sql("ALTER TABLE users ADD COLUMN responsible_id INTEGER")
+                migrated.append('responsible_id')
             # Ensure 'subtype' column exists on 'absences'
             try:
                 abs_cols = [r[1] for r in con.exec_driver_sql("PRAGMA table_info('absences')").fetchall()]
@@ -180,6 +245,12 @@ def init_db_with_demo():
                     print("✔ Columna 'subtype' agregada a 'absences'")
             except Exception as e:
                 print(f"⚠ Advertencia al migrar 'absences.subtype': {e}")
+            area_cols = [
+                r[1] for r in con.exec_driver_sql("PRAGMA table_info('areas')").fetchall()
+            ]
+            if 'cap_id' not in area_cols:
+                con.exec_driver_sql("ALTER TABLE areas ADD COLUMN cap_id INTEGER")
+                migrated.append('areas.cap_id')
             if migrated:
                 print(f"✓ Columnas migradas: {', '.join(migrated)}")
     except Exception as e:

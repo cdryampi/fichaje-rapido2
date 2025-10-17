@@ -22,6 +22,7 @@ class EmployeeForm(FlaskForm):
     role_id = SelectField("Rol", coerce=int, validators=[DataRequired()])
     area_id = SelectField("Area", coerce=int, validators=[Optional()])
     group_id = SelectField("Grupo", coerce=int, validators=[Optional()])
+    responsible_id = SelectField("Responsable directo", coerce=int, validators=[Optional()])
     is_active = BooleanField("Activo")
 
 

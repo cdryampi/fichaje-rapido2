@@ -694,13 +694,7 @@ def requests_page():
 from models import Absence, EntryStatus
 
 def _is_approver_for(approver: User, target: User) -> bool:
-    if approver.role in (Role.admin, Role.rrhh):
-        return True
-    if approver.role == Role.responsable:
-        return approver.group_id and approver.group_id == target.group_id
-    if approver.role == Role.cap_area:
-        return approver.area_id and approver.area_id == target.area_id
-    return False
+    return approver.can_validate_request_for(target)
 
 
 @app.route("/absences", methods=["GET"])
@@ -712,17 +706,40 @@ def absences_page():
 
         pending_for_me = []
         if current_user.role in (Role.admin, Role.rrhh, Role.responsable, Role.cap_area):
-            q_users = select(User)
-            if current_user.role == Role.responsable and current_user.group_id:
-                q_users = q_users.where(User.group_id == current_user.group_id)
-            elif current_user.role == Role.cap_area and current_user.area_id:
-                q_users = q_users.where(User.area_id == current_user.area_id)
-            users = db.execute(q_users).scalars().all()
-            user_ids = [u.id for u in users]
-            if user_ids:
-                pending_for_me = db.execute(
-                    select(Absence).where(Absence.user_id.in_(user_ids), Absence.status == EntryStatus.pending).order_by(Absence.date_from.desc())
+            if current_user.role in (Role.admin, Role.rrhh):
+                pending_query = select(Absence).where(Absence.status == EntryStatus.pending)
+            else:
+                candidate_ids = set(
+                    db.execute(
+                        select(User.id).where(User.responsible_id == current_user.id)
+                    ).scalars().all()
+                )
+                area_ids = set(
+                    db.execute(select(Area.id).where(Area.cap_id == current_user.id)).scalars().all()
+                )
+                if current_user.role == Role.cap_area and current_user.area_id:
+                    area_ids.add(current_user.area_id)
+                if area_ids:
+                    area_user_ids = db.execute(
+                        select(User.id).where(User.area_id.in_(area_ids))
+                    ).scalars().all()
+                    candidate_ids.update(area_user_ids)
+                if candidate_ids:
+                    pending_query = select(Absence).where(
+                        Absence.status == EntryStatus.pending,
+                        Absence.user_id.in_(candidate_ids),
+                    )
+                else:
+                    pending_query = None
+            if pending_query is not None:
+                pending_records = db.execute(
+                    pending_query.order_by(Absence.date_from.desc())
                 ).scalars().all()
+                pending_for_me = [
+                    absence
+                    for absence in pending_records
+                    if absence.can_be_validated_by(current_user)
+                ]
 
         return render_template("absences.html", mine=mine, pending=pending_for_me)
     finally:
@@ -765,8 +782,7 @@ def absences_approve(abs_id):
         a = db.get(Absence, abs_id)
         if not a:
             abort(404)
-        u = db.get(User, a.user_id)
-        if not _is_approver_for(current_user, u):
+        if not a.can_be_validated_by(current_user):
             abort(403)
         a.status = EntryStatus.approved
         db.commit()
@@ -784,8 +800,7 @@ def absences_reject(abs_id):
         a = db.get(Absence, abs_id)
         if not a:
             abort(404)
-        u = db.get(User, a.user_id)
-        if not _is_approver_for(current_user, u):
+        if not a.can_be_validated_by(current_user):
             abort(403)
         a.status = EntryStatus.rejected
         db.commit()
