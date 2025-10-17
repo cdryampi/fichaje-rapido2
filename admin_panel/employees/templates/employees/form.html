@@ -46,6 +46,15 @@
             <div class="text-danger small mt-1">{{ form.group_id.errors[0] }}</div>
             {% endif %}
           </div>
+          <div class="col-md-6">
+            {{ form.responsible_id.label(class="form-label") }}
+            {{ form.responsible_id(class="form-select") }}
+            {% if form.responsible_id.errors %}
+            <div class="text-danger small mt-1">{{ form.responsible_id.errors[0] }}</div>
+            {% elif not can_manage_responsibles %}
+            <div class="text-muted small mt-1">Solo RRHH y administradores pueden reasignar responsables.</div>
+            {% endif %}
+          </div>
           <div class="col-12">
             <div class="form-check form-switch">
               {{ form.is_active(class="form-check-input", id="is_active_switch") }}
