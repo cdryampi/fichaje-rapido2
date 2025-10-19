@@ -17,6 +17,7 @@ from rbac import can_view_user, can_edit_entries, require_view_user, require_edi
 from sqlalchemy import select, desc, func
 from functools import wraps
 from datetime import datetime, timezone
+import random
 from admin_panel import register_admin_panel
 
 # Zona horaria (con fallback si falta tzdata en Windows)
@@ -1023,6 +1024,63 @@ def advance_request():
 @login_required
 def info_page():
     return render_template("info.html")
+
+
+@app.route("/cementerio", methods=["GET", "POST"])
+@login_required
+def cementerio_page():
+    first_names = [
+        "Lucía",
+        "Martín",
+        "Sofía",
+        "Hugo",
+        "Valeria",
+        "Mateo",
+        "Paula",
+        "Daniel",
+        "Alba",
+        "Leo",
+    ]
+    last_names = [
+        "García",
+        "Martínez",
+        "Rodríguez",
+        "López",
+        "Sánchez",
+        "Pérez",
+        "Gómez",
+        "Fernández",
+        "Díaz",
+        "Moreno",
+    ]
+    domains = ["memorial.es", "recordatorios.com", "eterno.org", "descanso.net"]
+
+    result = None
+    dni = ""
+
+    if request.method == "POST":
+        dni = request.form.get("dni", "").strip().upper()
+        name = random.choice(first_names)
+        surname = random.choice(last_names)
+        phone = "+34 {} {} {}".format(
+            random.randint(600, 799),
+            str(random.randint(0, 999)).zfill(3),
+            str(random.randint(0, 999)).zfill(3),
+        )
+        email = f"{name}.{surname}{random.randint(10, 99)}@{random.choice(domains)}".lower()
+        is_up_to_date = random.choice([True, False])
+        result = {
+            "dni": dni or "(sin DNI)",
+            "name": name,
+            "surname": surname,
+            "phone": phone,
+            "email": email,
+            "is_up_to_date": is_up_to_date,
+            "status_text": "Al corriente de pago" if is_up_to_date else "Con pagos pendientes",
+            "status_class": "btn-green" if is_up_to_date else "btn-red",
+        }
+
+    return render_template("cementerio.html", result=result, last_dni=dni)
 
 
 @app.route("/schedules")
