@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="header">
+    <h2>Zona Cementerio</h2>
+    <button type="button" class="btn btn-small" onclick="window.toggleTheme && window.toggleTheme()">
+      <i data-lucide="moon" class="icon"></i> Tema
+    </button>
+  </div>
+  <p class="muted">Consulta rápida de DNI con resultados generados aleatoriamente para esta beta.</p>
+
+  <form method="post" class="row" style="gap:12px; align-items:flex-end;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label style="display:flex; flex-direction:column; gap:6px; flex:1;">
+      <span style="font-weight:600;">Consultar DNI</span>
+      <input type="text" name="dni" value="{{ last_dni }}" placeholder="Introduce un DNI" required>
+    </label>
+    <button type="submit" class="btn btn-green">
+      <i data-lucide="search" class="icon"></i> Consultar
+    </button>
+  </form>
+
+  {% if result %}
+  <div class="row" style="margin-top:20px;">
+    <div style="width:100%; border:1px solid #e2e2e2; border-radius:12px; padding:16px; background:rgba(20,20,20,0.02);">
+      <div class="header" style="gap:12px;">
+        <div>
+          <h3 style="margin:0;">Resultado aleatorio</h3>
+          <p class="muted" style="margin:4px 0 0;">DNI consultado: <strong>{{ result.dni }}</strong></p>
+        </div>
+        <button type="button" class="btn {{ result.status_class }}" disabled style="min-width:200px; justify-content:center;">
+          {{ result.status_text }}
+        </button>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-top:16px;">
+        <div>
+          <span class="muted" style="display:block; font-size:13px; text-transform:uppercase; letter-spacing:0.08em;">Nombre</span>
+          <strong>{{ result.name }}</strong>
+        </div>
+        <div>
+          <span class="muted" style="display:block; font-size:13px; text-transform:uppercase; letter-spacing:0.08em;">Apellido</span>
+          <strong>{{ result.surname }}</strong>
+        </div>
+        <div>
+          <span class="muted" style="display:block; font-size:13px; text-transform:uppercase; letter-spacing:0.08em;">Teléfono de contacto</span>
+          <strong>{{ result.phone }}</strong>
+        </div>
+        <div>
+          <span class="muted" style="display:block; font-size:13px; text-transform:uppercase; letter-spacing:0.08em;">E-mail de contacto</span>
+          <strong>{{ result.email }}</strong>
+        </div>
+      </div>
+      <div class="row" style="margin-top:18px; display:flex; flex-wrap:wrap; gap:10px;">
+        <button type="button" class="btn btn-small">
+          <i data-lucide="phone" class="icon"></i> Solicitud de cambio de teléfono
+        </button>
+        <button type="button" class="btn btn-small">
+          <i data-lucide="map-pin" class="icon"></i> Solicitud de cambio de dirección postal
+        </button>
+        <button type="button" class="btn btn-small">
+          <i data-lucide="mail" class="icon"></i> Solicitud de cambio de e-mail
+        </button>
+        <button type="button" class="btn btn-small">
+          <i data-lucide="credit-card" class="icon"></i> Solicitud de cambio nº de cuenta
+        </button>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="row" style="margin-top:20px;">
+    <div class="warn" style="width:100%;">
+      Introduce un DNI cualquiera para generar un resultado de prueba.
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
