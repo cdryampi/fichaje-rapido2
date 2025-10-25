@@ -75,8 +75,10 @@
 </style>
 <script>
   (function(){
-    var PDFJS_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js";
-    var PDFJS_WORKER_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
+    var PDFJS_SRC = "{{ url_for('static', filename='vendor/pdfjs/pdf.min.js') }}";
+    var PDFJS_WORKER_SRC = "{{ url_for('static', filename='vendor/pdfjs/pdf.worker.min.js') }}";
+    var PDFJS_FALLBACK_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    var PDFJS_FALLBACK_WORKER_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
     var fileInput = document.getElementById("pdf-file-input");
     var loadButton = document.getElementById("load-pdf-button");
     var detectButton = document.getElementById("detect-sensitive-button");
@@ -89,6 +91,7 @@
     if (!fileInput || !loadButton || !viewer || !container || !detectButton || !detectionSummary || !detectionList) { return; }
     var currentObjectUrl = null;
     var pdfLoaderPromise = null;
+    var activeWorkerSrc = PDFJS_WORKER_SRC;
 
     fileInput.addEventListener("change", function(){
       if (fileNameTarget) {
@@ -187,21 +190,34 @@
       }
       if (!pdfLoaderPromise) {
         pdfLoaderPromise = new Promise(function(resolve, reject){
-          var script = document.createElement("script");
-          script.src = PDFJS_SRC;
-          script.async = true;
-          script.onload = function(){
-            if (window.pdfjsLib) {
-              configurePdfWorker();
-              resolve(window.pdfjsLib);
-            } else {
-              reject(new Error("No se pudo cargar el analizador de PDF. Revisa tu conexion."));
-            }
-          };
-          script.onerror = function(){
-            reject(new Error("No se pudo cargar el analizador de PDF. Revisa tu conexion."));
-          };
-          document.head.appendChild(script);
+          var triedFallback = false;
+          function loadScript(src, workerSrc){
+            var script = document.createElement("script");
+            script.src = src;
+            script.async = true;
+            script.onload = function(){
+              if (window.pdfjsLib) {
+                activeWorkerSrc = workerSrc;
+                configurePdfWorker();
+                resolve(window.pdfjsLib);
+              } else if (!triedFallback && PDFJS_FALLBACK_SRC) {
+                triedFallback = true;
+                loadScript(PDFJS_FALLBACK_SRC, PDFJS_FALLBACK_WORKER_SRC);
+              } else {
+                reject(new Error("No se pudo cargar el analizador de PDF. Revisa tu conexion."));
+              }
+            };
+            script.onerror = function(){
+              if (!triedFallback && PDFJS_FALLBACK_SRC) {
+                triedFallback = true;
+                loadScript(PDFJS_FALLBACK_SRC, PDFJS_FALLBACK_WORKER_SRC);
+              } else {
+                reject(new Error("No se pudo cargar el analizador de PDF. Revisa tu conexion."));
+              }
+            };
+            document.head.appendChild(script);
+          }
+          loadScript(PDFJS_SRC, PDFJS_WORKER_SRC);
         });
         pdfLoaderPromise.catch(function(){
           pdfLoaderPromise = null;
@@ -212,7 +228,7 @@
 
     function configurePdfWorker(){
       if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = activeWorkerSrc;
       }
     }
 
