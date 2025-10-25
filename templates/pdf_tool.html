@@ -49,7 +49,7 @@
   .pdf-layout{display:flex;flex-direction:column;gap:16px}
   .pdf-uploader,.pdf-viewer{flex:1}
   .pdf-uploader h3,.pdf-viewer h3{margin-top:0;margin-bottom:12px}
-  .pdf-viewer__frame{position:relative;min-height:680px;border:1px dashed #d0d0d0;border-radius:12px;overflow:hidden;background:#fafafa}
+  .pdf-viewer__frame{position:relative;height:85vh;min-height:720px;border:1px dashed #d0d0d0;border-radius:12px;overflow:hidden;background:#fafafa}
   .pdf-viewer__frame iframe{display:none;width:100%;height:100%;border:0;background:#fff}
   .pdf-viewer__frame iframe.is-visible{display:block}
   .pdf-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;padding:24px;color:#666}
@@ -73,10 +73,10 @@
     .pdf-uploader{flex:0 0 320px}
   }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js"></script>
 <script>
   (function(){
+    var PDFJS_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js";
+    var PDFJS_WORKER_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
     var fileInput = document.getElementById("pdf-file-input");
     var loadButton = document.getElementById("load-pdf-button");
     var detectButton = document.getElementById("detect-sensitive-button");
@@ -88,11 +88,7 @@
     var detectionList = document.querySelector("[data-detection-list]");
     if (!fileInput || !loadButton || !viewer || !container || !detectButton || !detectionSummary || !detectionList) { return; }
     var currentObjectUrl = null;
-    var hasPdfJs = typeof window.pdfjsLib !== "undefined";
-
-    if (hasPdfJs && window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
-    }
+    var pdfLoaderPromise = null;
 
     fileInput.addEventListener("change", function(){
       if (fileNameTarget) {
@@ -139,19 +135,17 @@
         alert("El archivo seleccionado debe ser un PDF.");
         return;
       }
-      if (!hasPdfJs || !window.pdfjsLib) {
-        detectionSummary.textContent = "No se pudo cargar el analizador de PDF.";
-        return;
-      }
       detectButton.disabled = true;
       detectionSummary.textContent = "Analizando PDF en busca de datos sensibles...";
       detectionList.innerHTML = "";
 
-      var reader = new FileReader();
-      reader.onload = function(evt){
-        var buffer = evt.target.result;
-        var uint8 = new Uint8Array(buffer);
-        window.pdfjsLib.getDocument({ data: uint8 }).promise.then(function(pdfDoc){
+      ensurePdfJs()
+        .then(function(pdfjs){
+          return readFileAsArrayBuffer(file).then(function(uint8){
+            return pdfjs.getDocument({ data: uint8 }).promise;
+          });
+        })
+        .then(function(pdfDoc){
           var textPromises = [];
           for (var i = 1; i <= pdfDoc.numPages; i++) {
             textPromises.push(pdfDoc.getPage(i).then(function(page){
@@ -163,20 +157,21 @@
           return Promise.all(textPromises).then(function(pages){
             return pages.join("\n");
           });
-        }).then(function(fullText){
+        })
+        .then(function(fullText){
           renderSensitiveData(fullText || "", detectionSummary, detectionList);
-        }).catch(function(err){
+        })
+        .catch(function(err){
           console.error(err);
-          detectionSummary.textContent = "Hubo un problema analizando el PDF.";
-        }).finally(function(){
+          var message = err && err.message ? err.message : "Hubo un problema analizando el PDF.";
+          detectionSummary.textContent = message;
+          if (!detectionList.innerHTML) {
+            detectionList.innerHTML = '<li class="detection-empty">No fue posible analizar el documento.</li>';
+          }
+        })
+        .finally(function(){
           detectButton.disabled = false;
         });
-      };
-      reader.onerror = function(){
-        detectionSummary.textContent = "No se pudo leer el archivo PDF.";
-        detectButton.disabled = false;
-      };
-      reader.readAsArrayBuffer(file);
     });
 
     window.addEventListener("beforeunload", function(){
@@ -184,6 +179,55 @@
         URL.revokeObjectURL(currentObjectUrl);
       }
     });
+
+    function ensurePdfJs(){
+      if (window.pdfjsLib) {
+        configurePdfWorker();
+        return Promise.resolve(window.pdfjsLib);
+      }
+      if (!pdfLoaderPromise) {
+        pdfLoaderPromise = new Promise(function(resolve, reject){
+          var script = document.createElement("script");
+          script.src = PDFJS_SRC;
+          script.async = true;
+          script.onload = function(){
+            if (window.pdfjsLib) {
+              configurePdfWorker();
+              resolve(window.pdfjsLib);
+            } else {
+              reject(new Error("No se pudo cargar el analizador de PDF. Revisa tu conexion."));
+            }
+          };
+          script.onerror = function(){
+            reject(new Error("No se pudo cargar el analizador de PDF. Revisa tu conexion."));
+          };
+          document.head.appendChild(script);
+        });
+        pdfLoaderPromise.catch(function(){
+          pdfLoaderPromise = null;
+        });
+      }
+      return pdfLoaderPromise;
+    }
+
+    function configurePdfWorker(){
+      if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
+      }
+    }
+
+    function readFileAsArrayBuffer(file){
+      return new Promise(function(resolve, reject){
+        var reader = new FileReader();
+        reader.onload = function(evt){
+          resolve(new Uint8Array(evt.target.result));
+        };
+        reader.onerror = function(){
+          reject(new Error("No se pudo leer el archivo PDF."));
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
 
     function collectMatches(regexFactory, text, filter){
       var regex = regexFactory();
