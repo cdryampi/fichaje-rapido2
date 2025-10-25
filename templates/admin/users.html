@@ -23,6 +23,18 @@
         <option value="{{ g.id }}">{{ g.name }}</option>
       {% endfor %}
     </select>
+    <select name="area_id">
+      <option value="">-- Área --</option>
+      {% for area in areas %}
+        <option value="{{ area.id }}">{{ area.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="supervisor_id">
+      <option value="">-- Superior --</option>
+      {% for s in supervisors %}
+        <option value="{{ s.id }}">{{ s.name }} ({{ s.role.value }})</option>
+      {% endfor %}
+    </select>
     <button class="btn" type="submit">Crear</button>
   </form>
 
@@ -34,7 +46,9 @@
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Nombre</th>
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Email</th>
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Rol</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Área</th>
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Grupo</th>
+        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Superior</th>
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Creado</th>
         <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Acciones</th>
       </tr>
@@ -46,7 +60,9 @@
         <td style="padding:6px;">{{ u.name }}</td>
         <td style="padding:6px;">{{ u.email }}</td>
         <td style="padding:6px;">{{ u.role.value }}</td>
+        <td style="padding:6px;">{{ u.area.name if u.area else '-' }}</td>
         <td style="padding:6px;">{{ u.group.name if u.group else '-' }}</td>
+        <td style="padding:6px;">{{ u.supervisor.name if u.supervisor else '-' }}</td>
         <td style="padding:6px;">{{ (u.created_at or '').strftime('%d/%m/%Y %H:%M') if u.created_at else '-' }}</td>
         <td style="padding:6px;">
           <form method="post" action="{{ url_for('admin_users_reset_password', user_id=u.id) }}" style="display:inline-flex; gap:6px; align-items:center;">
@@ -71,11 +87,36 @@
           <form method="post" action="{{ url_for('admin_users_set_group', user_id=u.id) }}" style="display:inline-flex; gap:6px; align-items:center; margin-left:8px;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <select name="group_id" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
+              <option value="">Sin grupo</option>
               {% for g in groups %}
                 <option value="{{ g.id }}" {{ 'selected' if u.group_id==g.id else '' }}>{{ g.name }}</option>
               {% endfor %}
             </select>
             <button class="btn" type="submit">Cambiar grupo</button>
+          </form>
+
+          <form method="post" action="{{ url_for('admin_users_set_area', user_id=u.id) }}" style="display:inline-flex; gap:6px; align-items:center; margin-left:8px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="area_id" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
+              <option value="">Sin área</option>
+              {% for area in areas %}
+                <option value="{{ area.id }}" {{ 'selected' if u.area_id==area.id else '' }}>{{ area.name }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn" type="submit">Actualizar área</button>
+          </form>
+
+          <form method="post" action="{{ url_for('admin_users_set_supervisor', user_id=u.id) }}" style="display:inline-flex; gap:6px; align-items:center; margin-left:8px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="supervisor_id" style="padding:6px;border:1px solid #ccc;border-radius:6px;">
+              <option value="">Sin superior</option>
+              {% for s in supervisors %}
+                {% if s.id != u.id %}
+                  <option value="{{ s.id }}" {{ 'selected' if u.supervisor_id==s.id else '' }}>{{ s.name }} ({{ s.role.value }})</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <button class="btn" type="submit">Asignar superior</button>
           </form>
         </td>
       </tr>

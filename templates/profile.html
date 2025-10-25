@@ -8,6 +8,8 @@
     <input type="text" name="name" value="{{ user.name }}" {{ '' if current_user.role.value=='admin' else 'readonly' }}>
     <label>Email</label>
     <input type="email" name="email" value="{{ user.email }}" {{ '' if current_user.role.value=='admin' else 'readonly' }}>
+    <label>Superior directo</label>
+    <input type="text" value="{{ user.supervisor.name if user.supervisor else 'No asignado' }}" readonly>
     {% if current_user.role.value == 'admin' %}
       <div>
         <button class="btn btn-green" type="submit">Guardar</button>

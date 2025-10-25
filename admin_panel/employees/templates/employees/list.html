@@ -36,6 +36,7 @@
           <th scope="col">Rol</th>
           <th scope="col">Area</th>
           <th scope="col">Grupo</th>
+          <th scope="col">Responsable</th>
           <th scope="col">Estado</th>
           <th scope="col" class="text-end">Acciones</th>
         </tr>
@@ -48,6 +49,7 @@
           <td>{{ employee.role.name if employee.role else '-' }}</td>
           <td>{{ employee.area.name if employee.area else '-' }}</td>
           <td>{{ employee.group.name if employee.group else '-' }}</td>
+          <td>{{ responsible_map.get(employee.id) or '-' }}</td>
           <td>
             {% if employee.is_active %}
               <span class="badge bg-success">Activo</span>

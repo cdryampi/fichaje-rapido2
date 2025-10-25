@@ -9,6 +9,8 @@ from models import SessionLocal, User, Role, TimeEntry, GuestAccess
 def can_view_user(requester: User, target: User, db: Session = None) -> bool:
     if requester.role in (Role.admin, Role.rrhh):
         return True
+    if target.supervisor_id and target.supervisor_id == requester.id:
+        return True
     if requester.role == Role.employee:
         return requester.id == target.id
     if requester.role == Role.responsable:
@@ -40,6 +42,8 @@ def can_edit_entries(requester: User, target: User) -> bool:
     if requester.role == Role.invitado:
         return False
     if requester.role in (Role.admin, Role.rrhh):
+        return True
+    if target.supervisor_id and target.supervisor_id == requester.id:
         return True
     if requester.role == Role.employee:
         # Un empleado puede proponer cambios sobre sus propias entradas
