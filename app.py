@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, abort, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from models import (
     SessionLocal,
@@ -17,6 +17,7 @@ from rbac import can_view_user, can_edit_entries, require_view_user, require_edi
 from sqlalchemy import select, desc, func
 from functools import wraps
 from datetime import datetime, timezone
+import json
 import random
 from admin_panel import register_admin_panel
 
@@ -870,6 +871,120 @@ def entries_edit(entry_id):
 @login_required
 def pdf_tools():
     return render_template("pdf_tool.html")
+
+
+def _sanitize_candidate_list(candidates):
+    clean = []
+    for item in candidates or []:
+        label = (item.get("label") or "").strip()
+        value = (item.get("value") or "").strip()
+        if not label or not value:
+            continue
+        clean.append({"label": label[:50], "value": value[:400]})
+        if len(clean) >= 60:
+            break
+    return clean
+
+
+def _excerpt_text(text: str, limit: int = 6000) -> str:
+    trimmed = (text or "").strip()
+    if len(trimmed) <= limit:
+        return trimmed
+    return trimmed[:limit] + "\n[...recortado...]"
+
+
+def _ai_classify_sensitive(text: str, candidates: list[dict]):
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY no configurada en el servidor.")
+    try:
+        from openai import OpenAI
+    except Exception as exc:  # pragma: no cover - depende del runtime
+        raise RuntimeError(f"Dependencia openai no disponible: {exc}") from exc
+
+    client = OpenAI(api_key=api_key)
+    model = os.environ.get("PDF_AI_MODEL", "gpt-4o-mini")
+    payload = {
+        "document_excerpt": _excerpt_text(text),
+        "candidates": candidates,
+    }
+    system_prompt = (
+        "Eres un asistente experto en privacidad de datos. "
+        "Recibes fragmentos extraídos de un PDF y una lista de valores detectados. "
+        "Debes indicar si cada valor es realmente un dato personal o sensible. "
+        "Considera como datos sensibles: identificadores personales (DNI, NIE, pasaporte), "
+        "datos de contacto, direcciones, información laboral identificable, datos bancarios, "
+        "salud, información biométrica, etc. Ignora valores genéricos o que no puedan "
+        "atribuirse claramente a una persona. Responde en JSON."
+    )
+    user_prompt = json.dumps(payload, ensure_ascii=False)
+    try:
+        response = client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
+            ],
+            temperature=0,
+            max_output_tokens=500,
+            response_format={"type": "json_object"},
+        )
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError(f"Fallo al invocar al modelo {model}: {exc}") from exc
+
+    try:
+        content = response.output[0].content[0].text
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError("La respuesta del modelo no fue legible.") from exc
+
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("La IA devolvió un JSON inválido.") from exc
+
+    sensitive = parsed.get("sensitive") or []
+    non_sensitive = parsed.get("non_sensitive") or []
+    results = {
+        "sensitive": [
+            {
+                "label": (item.get("label") or "")[:50],
+                "value": (item.get("value") or "")[:400],
+                "reason": (item.get("reason") or "").strip()[:500],
+                "confidence": (item.get("confidence") or "").strip()[:40],
+            }
+            for item in sensitive
+            if (item.get("label") and item.get("value"))
+        ],
+        "non_sensitive": [
+            {
+                "label": (item.get("label") or "")[:50],
+                "value": (item.get("value") or "")[:400],
+                "reason": (item.get("reason") or "").strip()[:500],
+            }
+            for item in non_sensitive
+            if (item.get("label") and item.get("value"))
+        ],
+        "model": model,
+    }
+    return results
+
+
+@app.route("/api/pdf/analyze", methods=["POST"])
+@login_required
+def api_pdf_analyze():
+    payload = request.get_json(silent=True) or {}
+    text = (payload.get("text") or "").strip()
+    candidates = _sanitize_candidate_list(payload.get("candidates"))
+    if not text:
+        return jsonify({"ok": False, "error": "El texto del PDF es obligatorio."}), 400
+    if not candidates:
+        return jsonify({"ok": True, "sensitive": [], "non_sensitive": [], "model": None})
+    try:
+        result = _ai_classify_sensitive(text, candidates)
+    except RuntimeError as exc:
+        app.logger.warning("AI classification failed: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 503
+    return jsonify({"ok": True, **result})
 
 
 @app.route("/requests")

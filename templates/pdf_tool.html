@@ -75,6 +75,8 @@
   .detection-list li{padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #e5e5e5;font-size:14px;line-height:1.4}
   .detection-tag{display:inline-block;margin-right:8px;padding:2px 8px;border-radius:999px;background:#ffe7c2;color:#8a6d3b;font-size:12px;font-weight:700;text-transform:uppercase}
   .detection-empty{color:#666;font-style:italic}
+  .detection-reason{margin-top:4px;font-size:12px;color:#555}
+  .dark .detection-reason{color:#bbb}
   @media (min-width:900px){
     .pdf-layout{flex-direction:row;align-items:stretch}
   }
@@ -94,6 +96,7 @@
     var container = document.querySelector("[data-pdf-container]");
     var detectionSummary = document.querySelector("[data-detection-summary]");
     var detectionList = document.querySelector("[data-detection-list]");
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
     if (!fileInput || !loadButton || !renderer || !container || !detectButton || !detectionSummary || !detectionList) { return; }
 
     var pdfLoaderPromise = null;
@@ -102,6 +105,7 @@
     var currentPdfDoc = null;
     var renderedPages = [];
     var latestFindings = null;
+    var documentFullText = "";
 
     fileInput.addEventListener("change", function(){
       if (fileNameTarget) {
@@ -111,6 +115,7 @@
       detectionSummary.textContent = "No se ha analizado ningun PDF todavia.";
       detectionList.innerHTML = "";
       latestFindings = null;
+      documentFullText = "";
     });
 
     loadButton.addEventListener("click", function(){
@@ -130,10 +135,12 @@
       if (placeholder) {
         placeholder.classList.add("is-hidden");
       }
+      documentFullText = "";
+      latestFindings = null;
+      applyHighlights(null);
       readFileAsArrayBuffer(file)
         .then(function(uint8){
           currentPdfBytes = uint8;
-          latestFindings = null;
           return renderPdfDocument(currentPdfBytes);
         })
         .then(function(){
@@ -196,7 +203,8 @@
           });
         })
         .then(function(fullText){
-          renderSensitiveData(fullText || "", detectionSummary, detectionList);
+          documentFullText = fullText || "";
+          return processSensitiveData(documentFullText);
         })
         .catch(function(err){
           console.error(err);
@@ -214,6 +222,176 @@
 
     window.addEventListener("beforeunload", destroyCurrentPdf);
 
+    function processSensitiveData(fullText){
+      var groups = collectCandidateGroups(fullText);
+      if (!groups.length) {
+        detectionSummary.textContent = "No se detectaron patrones sensibles evidentes.";
+        detectionList.innerHTML = '<li class="detection-empty">Sin coincidencias.</li>';
+        applyHighlights(null);
+        return Promise.resolve();
+      }
+      detectionSummary.textContent = "Validando coincidencias con IA...";
+      detectionList.innerHTML = '<li class="detection-empty">Esperando validacion de IA...</li>';
+      return callAiValidation(fullText, groups)
+        .then(function(aiData){
+          if (aiData && aiData.sensitive && aiData.sensitive.length) {
+            var grouped = groupByLabel(aiData.sensitive);
+            renderResultsList(grouped, detectionList, { showReason: true });
+            var total = grouped.reduce(function(acc, item){
+              return acc + (item.entries ? item.entries.length : 0);
+            }, 0);
+            var note = aiData.model ? " (modelo " + aiData.model + ")" : "";
+            detectionSummary.textContent = "La IA confirmo " + total + " posible(s) dato(s) sensible(s)" + note + ".";
+            applyHighlights(grouped);
+            return;
+          }
+          detectionSummary.textContent = "La IA no identifico datos sensibles en el documento.";
+          detectionList.innerHTML = '<li class="detection-empty">Sin coincidencias confirmadas por IA.</li>';
+          applyHighlights(null);
+        })
+        .catch(function(err){
+          console.error(err);
+          detectionSummary.textContent = "Fallo la validacion con IA (" + err.message + "). Se muestran coincidencias basicas.";
+          renderResultsList(groups, detectionList, { showReason: false });
+          applyHighlights(groups);
+        });
+    }
+
+    function callAiValidation(fullText, groups){
+      var flattened = [];
+      groups.forEach(function(group){
+        if (!group || !group.entries) { return; }
+        group.entries.forEach(function(entry){
+          if (!entry || !entry.value) { return; }
+          flattened.push({ label: group.label, value: entry.value });
+        });
+      });
+      if (!flattened.length) {
+        return Promise.resolve({ sensitive: [] });
+      }
+      var headers = { "Content-Type": "application/json" };
+      var token = getCsrfToken();
+      if (token) {
+        headers["X-CSRFToken"] = token;
+      }
+      return fetch("/api/pdf/analyze", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: headers,
+        body: JSON.stringify({
+          text: fullText,
+          candidates: flattened
+        })
+      }).then(function(response){
+        return response.text().then(function(bodyText){
+          var data = {};
+          if (bodyText) {
+            try {
+              data = JSON.parse(bodyText);
+            } catch (err) {
+              throw new Error("No se pudo interpretar la respuesta del analizador.");
+            }
+          }
+          if (!response.ok || !data.ok) {
+            var message = data && data.error ? data.error : ("Error " + response.status);
+            throw new Error(message);
+          }
+          return data;
+        });
+      });
+    }
+
+    function collectCandidateGroups(text){
+      var detectors = [
+        {
+          label: "Telefonos",
+          regex: function(){ return /\b(?:\+?\d{2,3}[\s.-]?)?(?:\d[\s.-]?){9,12}\b/g; },
+          filter: function(value){
+            return value.replace(/\D/g, "").length >= 9;
+          }
+        },
+        {
+          label: "Emails",
+          regex: function(){ return /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi; }
+        },
+        {
+          label: "Nombres completos",
+          regex: function(){ return /\b(?:[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+(?:\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+){1,3})\b/g; },
+          filter: function(value){
+            return value.split(/\s+/).length >= 2;
+          }
+        },
+        {
+          label: "Direcciones",
+          regex: function(){ return /\b(?:calle|c\/|avenida|av\.?|paseo|plaza|camino|carretera)\s+[A-Z\u00C0-\u017Fa-z\u00C0-\u017F0-9\s.,-]{3,60}\b/gi; }
+        },
+        {
+          label: "Codigos postales",
+          regex: function(){ return /\b\d{5}\b/g; }
+        }
+      ];
+
+      var groups = [];
+      detectors.forEach(function(det){
+        var matches = collectMatches(det.regex, text, det.filter);
+        if (matches.length) {
+          groups.push({
+            label: det.label,
+            entries: matches.map(function(value){
+              return { value: value };
+            })
+          });
+        }
+      });
+      return groups;
+    }
+
+    function groupByLabel(items){
+      var grouped = Object.create(null);
+      items.forEach(function(item){
+        if (!item || !item.label || !item.value) { return; }
+        if (!grouped[item.label]) {
+          grouped[item.label] = [];
+        }
+        grouped[item.label].push({
+          value: item.value,
+          reason: item.reason || "",
+          confidence: item.confidence || ""
+        });
+      });
+      return Object.keys(grouped).map(function(label){
+        return { label: label, entries: grouped[label] };
+      });
+    }
+
+    function renderResultsList(groups, listEl, options){
+      if (!groups || !groups.length) {
+        listEl.innerHTML = '<li class="detection-empty">Sin coincidencias.</li>';
+        return;
+      }
+      var maxPerLabel = options && options.maxPerLabel ? options.maxPerLabel : 10;
+      var showReason = !!(options && options.showReason);
+      var html = groups.map(function(group){
+        var entriesHtml = group.entries.slice(0, maxPerLabel).map(function(entry){
+          var details = [];
+          if (showReason && entry.reason) {
+            details.push(entry.reason);
+          }
+          if (showReason && entry.confidence) {
+            details.push("Confianza: " + entry.confidence);
+          }
+          var detailHtml = details.length ? '<div class="detection-reason">' + escapeHtml(details.join(". ")) + '</div>' : "";
+          return "<div>" + escapeHtml(entry.value) + detailHtml + "</div>";
+        }).join("");
+        return '<li><span class="detection-tag">' + escapeHtml(group.label) + '</span>' + entriesHtml + '</li>';
+      }).join("");
+      listEl.innerHTML = html;
+    }
+
+    function getCsrfToken(){
+      return csrfMeta ? csrfMeta.getAttribute("content") : null;
+    }
+
     function isPdfFile(file){
       var name = file && file.name ? file.name : "";
       return file && (file.type === "application/pdf" || /\.pdf$/i.test(name));
@@ -225,6 +403,10 @@
         renderer.classList.remove("is-visible");
         renderer.scrollTop = 0;
       }
+      if (placeholder) {
+        placeholder.classList.remove("is-hidden");
+      }
+      container.classList.remove("has-file");
       renderedPages = [];
       latestFindings = null;
     }
@@ -299,6 +481,10 @@
           return Promise.all(renderTasks).then(function(){
             renderer.classList.add("is-visible");
             renderer.scrollTop = 0;
+            container.classList.add("has-file");
+            if (placeholder) {
+              placeholder.classList.add("is-hidden");
+            }
             if (latestFindings) {
               applyHighlights(latestFindings);
             } else {
@@ -389,67 +575,13 @@
       return output;
     }
 
-    function renderSensitiveData(text, summaryEl, listEl){
-      var detectors = [
-        {
-          label: "Telefonos",
-          regex: function(){ return /\b(?:\+?\d{2,3}[\s.-]?)?(?:\d[\s.-]?){9,12}\b/g; },
-          filter: function(value){
-            return value.replace(/\D/g, "").length >= 9;
-          }
-        },
-        {
-          label: "Emails",
-          regex: function(){ return /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi; }
-        },
-        {
-          label: "Nombres completos",
-          regex: function(){ return /\b(?:[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+(?:\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+){1,3})\b/g; },
-          filter: function(value){
-            return value.split(/\s+/).length >= 2;
-          }
-        },
-        {
-          label: "Direcciones",
-          regex: function(){ return /\b(?:calle|c\/|avenida|av\.?|paseo|plaza|camino|carretera)\s+[A-Z\u00C0-\u017Fa-z\u00C0-\u017F0-9\s.,-]{3,60}\b/gi; }
-        },
-        {
-          label: "Codigos postales",
-          regex: function(){ return /\b\d{5}\b/g; }
-        }
-      ];
-
-      var findings = [];
-      detectors.forEach(function(det){
-        var matches = collectMatches(det.regex, text, det.filter);
-        if (matches.length) {
-          findings.push({ label: det.label, matches: matches });
-        }
-      });
-
-      if (!findings.length) {
-        summaryEl.textContent = "No se detectaron patrones sensibles evidentes. Se limpiaron los resaltados.";
-        listEl.innerHTML = '<li class="detection-empty">Sin coincidencias.</li>';
-        applyHighlights(null);
-        return;
-      }
-
-      summaryEl.textContent = "Se encontraron posibles datos sensibles en el documento. Revisa los resaltados amarillos.";
-      var fragments = findings.map(function(item){
-        var values = item.matches.slice(0, 10).map(function(m){ return "<div>" + escapeHtml(m) + "</div>"; }).join("");
-        return '<li><span class="detection-tag">' + escapeHtml(item.label) + '</span>' + values + '</li>';
-      });
-      listEl.innerHTML = fragments.join("");
-      applyHighlights(findings);
-    }
-
     function applyHighlights(findings){
       latestFindings = findings && findings.length ? findings : null;
       var terms = extractHighlightTerms(latestFindings);
       renderedPages.forEach(function(page){
         if (!page || !page.textDivs) { return; }
         page.textDivs.forEach(function(div){
-          var original = div.dataset && typeof div.dataset.rawText === "string" ? div.dataset.rawText : div.textContent || "";
+          var original = div.dataset && typeof div.dataset.rawText === "string" ? div.dataset.rawText : (div.textContent || "");
           if (!terms.length) {
             if (div.textContent !== original) {
               div.textContent = original;
@@ -472,10 +604,10 @@
       }
       var seen = Object.create(null);
       var terms = [];
-      findings.forEach(function(item){
-        if (!item || !item.matches) { return; }
-        item.matches.forEach(function(match){
-          var term = (match || "").trim();
+      findings.forEach(function(group){
+        if (!group || !group.entries) { return; }
+        group.entries.forEach(function(entry){
+          var term = entry && entry.value ? entry.value.trim() : "";
           if (!term) { return; }
           var key = term.toLowerCase();
           if (!seen[key]) {
@@ -511,7 +643,7 @@
         if (index > lastIndex) {
           pieces.push(escapeHtml(text.slice(lastIndex, index)));
         }
-        pieces.push('<span class="pdf-highlight">' + escapeHtml(match[0]) + "</span>");
+        pieces.push('<span class="pdf-highlight">' + escapeHtml(match[0]) + '</span>');
         lastIndex = index + match[0].length;
         changed = true;
       }
@@ -542,4 +674,5 @@
     }
   })();
 </script>
+
 {% endblock %}
