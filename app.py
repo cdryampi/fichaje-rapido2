@@ -684,6 +684,12 @@ def entries_edit(entry_id):
 
 
 # ----- Simple pages for menu -----
+@app.route("/pdf", methods=["GET"])
+@login_required
+def pdf_tools():
+    return render_template("pdf_tool.html")
+
+
 @app.route("/requests")
 @login_required
 def requests_page():

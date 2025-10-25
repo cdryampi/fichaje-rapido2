@@ -148,6 +148,7 @@
     </button>
     <nav class="nav" data-nav>
       <a href="{{ url_for('index') }}"><i data-lucide="home" class="icon"></i> Inicio</a>
+      <a href="{{ url_for('pdf_tools') }}"><i data-lucide="file-text" class="icon"></i> PDF</a>
       {% if current_user.role.value == 'admin' %}
       <a href="{{ url_for('admin_home') }}"><i data-lucide="layout-dashboard" class="icon"></i> Panel de administracion</a>
       {% endif %}
