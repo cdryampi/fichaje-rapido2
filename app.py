@@ -18,6 +18,7 @@ from sqlalchemy import select, desc, func
 from functools import wraps
 from datetime import datetime, timezone
 import json
+from dotenv import load_dotenv
 import random
 from admin_panel import register_admin_panel
 
@@ -79,6 +80,8 @@ def parse_local_date(d: str):
         return None
 
 import os
+
+load_dotenv()
 
 app = Flask(__name__)
 # Lee SECRET_KEY del entorno, usa valor por defecto en desarrollo
