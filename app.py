@@ -19,6 +19,7 @@ from functools import wraps
 from datetime import datetime, timezone
 import json
 import re
+from collections import deque
 from dotenv import load_dotenv
 import random
 from admin_panel import register_admin_panel
@@ -993,6 +994,27 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         chunk_size = 20
     chunk_size = max(1, min(chunk_size, 60))
 
+    try:
+        excerpt_limit_env = int(os.environ.get("PDF_AI_EXCERPT_LIMIT", "6000"))
+    except ValueError:
+        excerpt_limit_env = 6000
+    excerpt_limit_env = max(500, min(excerpt_limit_env, 12000))
+
+    excerpt_candidates: list[int] = []
+    for value in (
+        excerpt_limit_env,
+        excerpt_limit_env // 2,
+        3000,
+        2000,
+        1200,
+        800,
+    ):
+        value = max(500, min(value, 12000))
+        if value not in excerpt_candidates:
+            excerpt_candidates.append(value)
+
+    excerpt_cache: dict[int, str] = {}
+
     system_prompt = (
         "Eres un asistente experto en privacidad de datos. "
         "Recibes fragmentos extraídos de un PDF y una lista de valores detectados. "
@@ -1045,18 +1067,43 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         },
     }
 
-    document_excerpt = _excerpt_text(text)
     total_chunks = (len(candidates) + chunk_size - 1) // chunk_size or 1
     combined_sensitive: list[dict] = []
     combined_non_sensitive: list[dict] = []
     supports_response_format = True
+    queue = deque()
 
     for chunk_index in range(total_chunks):
         chunk = candidates[chunk_index * chunk_size : (chunk_index + 1) * chunk_size]
+        if not chunk:
+            continue
+        queue.append(
+            {
+                "chunk": chunk,
+                "info": {
+                    "index": chunk_index + 1,
+                    "total": total_chunks,
+                    "size": len(chunk),
+                    "split_level": 0,
+                    "split_part": None,
+                },
+            }
+        )
+
+    if not queue:
+        return {"sensitive": [], "non_sensitive": [], "model": model}
+
+    def _get_excerpt(limit: int) -> str:
+        if limit not in excerpt_cache:
+            excerpt_cache[limit] = _excerpt_text(text, limit=limit)
+        return excerpt_cache[limit]
+
+    def _call_model(chunk: list[dict], chunk_info: dict, excerpt_text: str):
+        nonlocal supports_response_format
         payload = {
-            "document_excerpt": document_excerpt,
+            "document_excerpt": excerpt_text,
             "candidates": chunk,
-            "chunk_info": {"index": chunk_index + 1, "total": total_chunks},
+            "chunk_info": chunk_info,
         }
         user_prompt = json.dumps(payload, ensure_ascii=False)
         request_kwargs = {
@@ -1091,15 +1138,15 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         try:
             content = getattr(response, "output_text", None)
             truncated = False
-            chunks = []
+            chunks_text = []
             for item in getattr(response, "output", []) or []:
                 if getattr(item, "finish_reason", None) == "length":
                     truncated = True
                 for piece in getattr(item, "content", []) or []:
                     if getattr(piece, "type", None) == "output_text":
-                        chunks.append(getattr(piece, "text", ""))
+                        chunks_text.append(getattr(piece, "text", ""))
             if not content:
-                content = "".join(chunks).strip()
+                content = "".join(chunks_text).strip()
             if not content:
                 raise ValueError("empty content")
             if not truncated:
@@ -1110,21 +1157,79 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         except Exception as exc:  # pragma: no cover
             raise RuntimeError("La respuesta del modelo no fue legible.") from exc
 
-        if truncated:
-            raise RuntimeError(
-                "La respuesta del modelo fue truncada por el límite de tokens. "
-                "Aumenta PDF_AI_MAX_OUTPUT_TOKENS, reduce PDF_AI_CANDIDATES_PER_CALL "
-                "o limita el número de candidatos enviados."
-            )
-
         try:
             parsed = _parse_model_json(content)
         except json.JSONDecodeError as exc:
             raise RuntimeError("La IA devolvió un JSON inválido.") from exc
 
         sensitive_chunk, non_sensitive_chunk = _normalize_model_output(parsed)
-        combined_sensitive.extend(sensitive_chunk)
-        combined_non_sensitive.extend(non_sensitive_chunk)
+        return sensitive_chunk, non_sensitive_chunk, truncated
+
+    while queue:
+        current = queue.popleft()
+        chunk = current["chunk"]
+        chunk_info = current["info"]
+        if not chunk:
+            continue
+
+        truncated = True
+        last_error = None
+        for limit in excerpt_candidates:
+            excerpt_text = _get_excerpt(limit)
+            try:
+                sensitive_chunk, non_sensitive_chunk, truncated = _call_model(chunk, {**chunk_info, "excerpt_limit": limit}, excerpt_text)
+                last_error = None
+            except RuntimeError as exc:
+                last_error = exc
+                truncated = False
+                break
+            if not truncated:
+                combined_sensitive.extend(sensitive_chunk)
+                combined_non_sensitive.extend(non_sensitive_chunk)
+                break
+        else:
+            # Loop exhausted without break (still truncated for all limits)
+            truncated = True
+
+        if last_error:
+            raise last_error
+
+        if truncated:
+            if len(chunk) <= 1:
+                raise RuntimeError(
+                    "La respuesta del modelo fue truncada incluso reduciendo el contexto. "
+                    "Reduce el tamaño del PDF o el número de candidatos para esta sección."
+                )
+            mid = len(chunk) // 2
+            left = chunk[:mid]
+            right = chunk[mid:]
+            split_level = chunk_info.get("split_level", 0) + 1
+            # Process left chunk first preserving order
+            if right:
+                queue.appendleft(
+                    {
+                        "chunk": right,
+                        "info": {
+                            **chunk_info,
+                            "size": len(right),
+                            "split_level": split_level,
+                            "split_part": "right",
+                        },
+                    }
+                )
+            if left:
+                queue.appendleft(
+                    {
+                        "chunk": left,
+                        "info": {
+                            **chunk_info,
+                            "size": len(left),
+                            "split_level": split_level,
+                            "split_part": "left",
+                        },
+                    }
+                )
+            continue
 
     return {
         "sensitive": combined_sensitive,
