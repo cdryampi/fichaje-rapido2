@@ -925,8 +925,14 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         response = client.responses.create(
             model=model,
             input=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": system_prompt}],
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": user_prompt}],
+                },
             ],
             temperature=0,
             max_output_tokens=500,
@@ -935,7 +941,16 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         raise RuntimeError(f"Fallo al invocar al modelo {model}: {exc}") from exc
 
     try:
-        content = response.output[0].content[0].text
+        content = getattr(response, "output_text", None)
+        if not content:
+            chunks = []
+            for item in getattr(response, "output", []) or []:
+                for piece in getattr(item, "content", []) or []:
+                    if getattr(piece, "type", None) == "output_text":
+                        chunks.append(getattr(piece, "text", ""))
+            content = "".join(chunks).strip()
+        if not content:
+            raise ValueError("empty content")
     except Exception as exc:  # pragma: no cover
         raise RuntimeError("La respuesta del modelo no fue legible.") from exc
 
