@@ -18,6 +18,7 @@ from sqlalchemy import select, desc, func
 from functools import wraps
 from datetime import datetime, timezone
 import json
+import re
 from dotenv import load_dotenv
 import random
 from admin_panel import register_admin_panel
@@ -896,6 +897,80 @@ def _excerpt_text(text: str, limit: int = 6000) -> str:
     return trimmed[:limit] + "\n[...recortado...]"
 
 
+def _parse_model_json(content: str) -> dict:
+    """Intenta interpretar JSON aunque el modelo envíe envoltorios."""
+    raw = (content or "").strip()
+    if not raw:
+        raise json.JSONDecodeError("empty content", raw, 0)
+
+    candidates: list[str] = []
+    fence = re.search(r"```(?:json)?\s*(.+?)\s*```", raw, re.DOTALL | re.IGNORECASE)
+    if fence:
+        candidates.append(fence.group(1).strip())
+    brace = re.search(r"\{.*\}", raw, re.DOTALL)
+    if brace:
+        candidates.append(brace.group(0).strip())
+    candidates.append(raw)
+
+    last_exc: json.JSONDecodeError | None = None
+    for candidate in candidates:
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError as exc:
+            last_exc = exc
+    if last_exc:
+        raise last_exc
+    raise json.JSONDecodeError("Unparseable JSON content", raw, 0)
+
+
+def _normalize_model_output(parsed: object) -> tuple[list[dict], list[dict]]:
+    """Acepta diferentes variantes de salida y normaliza a (sensitive, non_sensitive)."""
+    sensitive: list[dict] = []
+    non_sensitive: list[dict] = []
+
+    def _push(target: list[dict], item: dict):
+        label = (item.get("label") or item.get("data_type") or "").strip()
+        value = (item.get("value") or "").strip()
+        if not label or not value:
+            return
+        target.append(
+            {
+                "label": label[:50],
+                "value": value[:400],
+                "reason": (item.get("reason") or item.get("explanation") or "").strip()[:500],
+                "confidence": (item.get("confidence") or item.get("confidence_level") or "").strip()[:40],
+            }
+        )
+
+    if isinstance(parsed, dict):
+        if "sensitive" in parsed or "non_sensitive" in parsed:
+            for item in parsed.get("sensitive") or []:
+                if isinstance(item, dict):
+                    _push(sensitive, item)
+            for item in parsed.get("non_sensitive") or []:
+                if isinstance(item, dict):
+                    _push(non_sensitive, item)
+            return sensitive, non_sensitive
+        results = parsed.get("results")
+        if isinstance(results, list):
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                target = sensitive if item.get("is_personal_data") else non_sensitive
+                _push(target, item)
+            return sensitive, non_sensitive
+
+    if isinstance(parsed, list):
+        for item in parsed:
+            if not isinstance(item, dict):
+                continue
+            target = sensitive if item.get("is_personal_data") else non_sensitive
+            _push(target, item)
+        return sensitive, non_sensitive
+
+    return sensitive, non_sensitive
+
+
 def _ai_classify_sensitive(text: str, candidates: list[dict]):
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -907,10 +982,17 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
 
     client = OpenAI(api_key=api_key)
     model = os.environ.get("PDF_AI_MODEL", "gpt-4o-mini")
-    payload = {
-        "document_excerpt": _excerpt_text(text),
-        "candidates": candidates,
-    }
+    try:
+        max_tokens = int(os.environ.get("PDF_AI_MAX_OUTPUT_TOKENS", "1500"))
+    except ValueError:
+        max_tokens = 1500
+    max_tokens = max(300, min(max_tokens, 10_000))
+    try:
+        chunk_size = int(os.environ.get("PDF_AI_CANDIDATES_PER_CALL", "20"))
+    except ValueError:
+        chunk_size = 20
+    chunk_size = max(1, min(chunk_size, 60))
+
     system_prompt = (
         "Eres un asistente experto en privacidad de datos. "
         "Recibes fragmentos extraídos de un PDF y una lista de valores detectados. "
@@ -918,72 +1000,127 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         "Considera como datos sensibles: identificadores personales (DNI, NIE, pasaporte), "
         "datos de contacto, direcciones, información laboral identificable, datos bancarios, "
         "salud, información biométrica, etc. Ignora valores genéricos o que no puedan "
-        "atribuirse claramente a una persona. Responde en JSON."
+        "atribuirse claramente a una persona. Devuelve exclusivamente un único objeto JSON "
+        "válido que cumpla el esquema indicado sin texto adicional."
     )
-    user_prompt = json.dumps(payload, ensure_ascii=False)
-    try:
-        response = client.responses.create(
-            model=model,
-            input=[
-                {
-                    "role": "system",
-                    "content": [{"type": "input_text", "text": system_prompt}],
+    response_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sensitive_data_classification",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "sensitive": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "value": {"type": "string"},
+                                "reason": {"type": "string"},
+                                "confidence": {"type": "string"},
+                            },
+                            "required": ["label", "value"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "non_sensitive": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "value": {"type": "string"},
+                                "reason": {"type": "string"},
+                                "confidence": {"type": "string"},
+                            },
+                            "required": ["label", "value"],
+                            "additionalProperties": False,
+                        },
+                    },
                 },
-                {
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": user_prompt}],
-                },
-            ],
-            temperature=0,
-            max_output_tokens=500,
-        )
-    except Exception as exc:  # pragma: no cover
-        raise RuntimeError(f"Fallo al invocar al modelo {model}: {exc}") from exc
+                "required": ["sensitive", "non_sensitive"],
+                "additionalProperties": False,
+            },
+        },
+    }
 
-    try:
-        content = getattr(response, "output_text", None)
-        if not content:
+    document_excerpt = _excerpt_text(text)
+    total_chunks = (len(candidates) + chunk_size - 1) // chunk_size or 1
+    combined_sensitive: list[dict] = []
+    combined_non_sensitive: list[dict] = []
+
+    for chunk_index in range(total_chunks):
+        chunk = candidates[chunk_index * chunk_size : (chunk_index + 1) * chunk_size]
+        payload = {
+            "document_excerpt": document_excerpt,
+            "candidates": chunk,
+            "chunk_info": {"index": chunk_index + 1, "total": total_chunks},
+        }
+        user_prompt = json.dumps(payload, ensure_ascii=False)
+        try:
+            response = client.responses.create(
+                model=model,
+                input=[
+                    {
+                        "role": "system",
+                        "content": [{"type": "input_text", "text": system_prompt}],
+                    },
+                    {
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": user_prompt}],
+                    },
+                ],
+                temperature=0,
+                max_output_tokens=max_tokens,
+                response_format=response_format,
+            )
+        except Exception as exc:  # pragma: no cover
+            raise RuntimeError(f"Fallo al invocar al modelo {model}: {exc}") from exc
+
+        try:
+            content = getattr(response, "output_text", None)
+            truncated = False
             chunks = []
             for item in getattr(response, "output", []) or []:
+                if getattr(item, "finish_reason", None) == "length":
+                    truncated = True
                 for piece in getattr(item, "content", []) or []:
                     if getattr(piece, "type", None) == "output_text":
                         chunks.append(getattr(piece, "text", ""))
-            content = "".join(chunks).strip()
-        if not content:
-            raise ValueError("empty content")
-    except Exception as exc:  # pragma: no cover
-        raise RuntimeError("La respuesta del modelo no fue legible.") from exc
+            if not content:
+                content = "".join(chunks).strip()
+            if not content:
+                raise ValueError("empty content")
+            if not truncated:
+                usage = getattr(response, "usage", None)
+                output_tokens = getattr(usage, "output_tokens", None) if usage else None
+                if output_tokens and output_tokens >= max_tokens:
+                    truncated = True
+        except Exception as exc:  # pragma: no cover
+            raise RuntimeError("La respuesta del modelo no fue legible.") from exc
 
-    try:
-        parsed = json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("La IA devolvió un JSON inválido.") from exc
+        if truncated:
+            raise RuntimeError(
+                "La respuesta del modelo fue truncada por el límite de tokens. "
+                "Aumenta PDF_AI_MAX_OUTPUT_TOKENS, reduce PDF_AI_CANDIDATES_PER_CALL "
+                "o limita el número de candidatos enviados."
+            )
 
-    sensitive = parsed.get("sensitive") or []
-    non_sensitive = parsed.get("non_sensitive") or []
-    results = {
-        "sensitive": [
-            {
-                "label": (item.get("label") or "")[:50],
-                "value": (item.get("value") or "")[:400],
-                "reason": (item.get("reason") or "").strip()[:500],
-                "confidence": (item.get("confidence") or "").strip()[:40],
-            }
-            for item in sensitive
-            if (item.get("label") and item.get("value"))
-        ],
-        "non_sensitive": [
-            {
-                "label": (item.get("label") or "")[:50],
-                "value": (item.get("value") or "")[:400],
-                "reason": (item.get("reason") or "").strip()[:500],
-            }
-            for item in non_sensitive
-            if (item.get("label") and item.get("value"))
-        ],
+        try:
+            parsed = _parse_model_json(content)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("La IA devolvió un JSON inválido.") from exc
+
+        sensitive_chunk, non_sensitive_chunk = _normalize_model_output(parsed)
+        combined_sensitive.extend(sensitive_chunk)
+        combined_non_sensitive.extend(non_sensitive_chunk)
+
+    return {
+        "sensitive": combined_sensitive,
+        "non_sensitive": combined_non_sensitive,
         "model": model,
     }
-    return results
 
 
 @app.route("/api/pdf/analyze", methods=["POST"])
