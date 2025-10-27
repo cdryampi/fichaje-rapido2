@@ -930,7 +930,6 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
             ],
             temperature=0,
             max_output_tokens=500,
-            response_format={"type": "json_object"},
         )
     except Exception as exc:  # pragma: no cover
         raise RuntimeError(f"Fallo al invocar al modelo {model}: {exc}") from exc
