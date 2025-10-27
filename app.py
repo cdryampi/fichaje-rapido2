@@ -1049,6 +1049,7 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
     total_chunks = (len(candidates) + chunk_size - 1) // chunk_size or 1
     combined_sensitive: list[dict] = []
     combined_non_sensitive: list[dict] = []
+    supports_response_format = True
 
     for chunk_index in range(total_chunks):
         chunk = candidates[chunk_index * chunk_size : (chunk_index + 1) * chunk_size]
@@ -1058,23 +1059,32 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
             "chunk_info": {"index": chunk_index + 1, "total": total_chunks},
         }
         user_prompt = json.dumps(payload, ensure_ascii=False)
+        request_kwargs = {
+            "model": model,
+            "input": [
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": system_prompt}],
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": user_prompt}],
+                },
+            ],
+            "temperature": 0,
+            "max_output_tokens": max_tokens,
+        }
+        if supports_response_format:
+            request_kwargs["response_format"] = response_format
         try:
-            response = client.responses.create(
-                model=model,
-                input=[
-                    {
-                        "role": "system",
-                        "content": [{"type": "input_text", "text": system_prompt}],
-                    },
-                    {
-                        "role": "user",
-                        "content": [{"type": "input_text", "text": user_prompt}],
-                    },
-                ],
-                temperature=0,
-                max_output_tokens=max_tokens,
-                response_format=response_format,
-            )
+            response = client.responses.create(**request_kwargs)
+        except TypeError as exc:
+            if supports_response_format and "response_format" in str(exc):
+                supports_response_format = False
+                request_kwargs.pop("response_format", None)
+                response = client.responses.create(**request_kwargs)
+            else:
+                raise
         except Exception as exc:  # pragma: no cover
             raise RuntimeError(f"Fallo al invocar al modelo {model}: {exc}") from exc
 
