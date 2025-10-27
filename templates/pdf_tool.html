@@ -47,10 +47,11 @@
 <style>
   .pdf-page{display:flex;flex-direction:column;gap:16px}
   .pdf-layout{display:flex;flex-direction:column;gap:16px}
-  .pdf-uploader{flex:0 0 320px}
-  .pdf-viewer{flex:2 1 0;min-width:0}
+  .pdf-page .card{max-width:none;width:100%}
+  .pdf-uploader{flex:0 0 auto;width:100%}
+  .pdf-viewer{flex:1 1 auto;min-width:0}
   .pdf-uploader h3,.pdf-viewer h3{margin-top:0;margin-bottom:12px}
-  .pdf-viewer__frame{position:relative;height:85vh;min-height:720px;border:1px dashed #d0d0d0;border-radius:12px;overflow:hidden;background:#fafafa}
+  .pdf-viewer__frame{position:relative;height:85vh;min-height:720px;border:1px dashed #d0d0d0;border-radius:12px;overflow:hidden;background:#fafafa;width:100%}
   .pdf-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;padding:24px;color:#666}
   .pdf-placeholder .icon{width:36px;height:36px}
   .pdf-placeholder.is-hidden{display:none}
@@ -60,7 +61,9 @@
   .pdf-page-render:last-child{margin-bottom:0}
   .pdf-page-render canvas{display:block;width:100%;height:auto;border-radius:6px}
   .pdf-text-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;font-family:inherit;line-height:1;white-space:pre}
-  .pdf-text-layer div{position:absolute;transform-origin:0 0;color:transparent}
+  .pdf-text-layer div{position:absolute;transform-origin:0 0;color:transparent!important}
+  .pdf-text-layer span{color:transparent!important}
+  .pdf-text-layer .pdf-highlight{color:#111!important}
   .pdf-highlight{background:rgba(255,235,59,.65);border-radius:3px;box-shadow:0 0 6px rgba(255,213,0,.4)}
   .file-picker{display:flex;align-items:center;justify-content:center;gap:12px;padding:16px;border:1px dashed #bbb;border-radius:12px;background:#fff;cursor:pointer;transition:border-color .2s ease,background-color .2s ease}
   .file-picker:hover{border-color:#888;background:#f5f5f5}
@@ -82,7 +85,8 @@
   .dark .detection-empty{color:#94a3b8}
   .dark .detection-reason{color:#cbd5f5}
   @media (min-width:900px){
-    .pdf-layout{flex-direction:row;align-items:stretch}
+    .pdf-layout{flex-direction:row;align-items:flex-start;gap:24px}
+    .pdf-uploader{flex:0 0 360px;max-width:360px}
   }
 </style>
 <script>
