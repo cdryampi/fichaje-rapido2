@@ -25,9 +25,19 @@
         <i data-lucide="shield-alert" class="icon"></i>
         Detectar datos sensibles
       </button>
+      <button type="button" class="btn btn-red detect-btn" id="obfuscate-sensitive-button" disabled>
+        <i data-lucide="eye-off" class="icon"></i>
+        Emborronar datos sensibles
+      </button>
       <div class="detection-panel" data-detection-output>
         <h4>Resultados del analisis</h4>
         <p class="muted small" data-detection-summary>No se ha analizado ningun PDF todavia.</p>
+        <div class="detection-controls is-hidden" data-select-all-container>
+          <label class="detection-checkbox-label">
+            <input type="checkbox" id="sensitive-select-all" />
+            <span>Seleccionar/deseleccionar todos</span>
+          </label>
+        </div>
         <ul class="detection-list" data-detection-list></ul>
       </div>
       <p class="muted small">El PDF no se guarda en el servidor; se muestra solo para ti.</p>
@@ -65,6 +75,8 @@
   .pdf-text-layer span{color:transparent!important}
   .pdf-text-layer .pdf-highlight{color:#111!important}
   .pdf-highlight{background:rgba(255,235,59,.65);border-radius:3px;box-shadow:0 0 6px rgba(255,213,0,.4)}
+  .pdf-redaction{display:inline-block;background:#111827!important;color:transparent!important;position:relative;border-radius:3px;box-shadow:none!important}
+  .pdf-redaction::after{content:"";position:absolute;inset:0;background:rgba(15,23,42,.92);border-radius:3px}
   .file-picker{display:flex;align-items:center;justify-content:center;gap:12px;padding:16px;border:1px dashed #bbb;border-radius:12px;background:#fff;cursor:pointer;transition:border-color .2s ease,background-color .2s ease}
   .file-picker:hover{border-color:#888;background:#f5f5f5}
   .file-picker input{display:none}
@@ -74,8 +86,17 @@
   .detect-btn{margin-top:6px;width:100%;justify-content:center}
   .detection-panel{margin-top:14px;padding:16px;border:1px solid #1f2937;border-radius:10px;background:#1e293b;color:#e2e8f0;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 30px rgba(15,23,42,.35)}
   .detection-panel h4{margin:0;font-size:15px;color:#f1f5f9}
+  .detection-controls{display:flex;justify-content:flex-end}
+  .detection-controls.is-hidden{display:none}
+  .detection-checkbox-label{display:flex;align-items:center;gap:8px;font-size:13px;color:inherit;cursor:pointer}
+  .detection-checkbox-label input{width:16px;height:16px}
   .detection-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
   .detection-list li{padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.08);border:1px solid rgba(148,163,184,.4);font-size:14px;line-height:1.5;color:#f8fafc}
+  .detection-item{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px}
+  .detection-values{display:flex;flex-direction:column;gap:6px;flex:1}
+  .detection-option{display:flex;align-items:flex-start;gap:8px;color:inherit;cursor:pointer;flex:1}
+  .detection-option input{margin-top:2px;flex:0 0 auto}
+  .detection-option span{display:block;color:inherit;flex:1}
   .detection-tag{display:inline-block;margin-right:8px;padding:2px 8px;border-radius:999px;background:#ffe7c2;color:#8a6d3b;font-size:12px;font-weight:700;text-transform:uppercase}
   .detection-empty{color:#cbd5f5;font-style:italic}
   .detection-reason{margin-top:4px;font-size:12px;color:#cbd5f5}
@@ -84,6 +105,7 @@
   .dark .detection-list li{background:rgba(148,163,184,.12);border-color:rgba(148,163,184,.35)}
   .dark .detection-empty{color:#94a3b8}
   .dark .detection-reason{color:#cbd5f5}
+  .dark .pdf-redaction::after{background:rgba(2,6,23,.92)}
   @media (min-width:900px){
     .pdf-layout{flex-direction:row;align-items:flex-start;gap:24px}
     .pdf-uploader{flex:0 0 360px;max-width:360px}
@@ -98,14 +120,17 @@
     var fileInput = document.getElementById("pdf-file-input");
     var loadButton = document.getElementById("load-pdf-button");
     var detectButton = document.getElementById("detect-sensitive-button");
+    var obfuscateButton = document.getElementById("obfuscate-sensitive-button");
     var fileNameTarget = document.querySelector("[data-file-name]");
     var renderer = document.querySelector("[data-pdf-renderer]");
     var placeholder = document.querySelector("[data-pdf-placeholder]");
     var container = document.querySelector("[data-pdf-container]");
     var detectionSummary = document.querySelector("[data-detection-summary]");
     var detectionList = document.querySelector("[data-detection-list]");
+    var selectAllCheckbox = document.getElementById("sensitive-select-all");
+    var selectAllContainer = document.querySelector("[data-select-all-container]");
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');
-    if (!fileInput || !loadButton || !renderer || !container || !detectButton || !detectionSummary || !detectionList) { return; }
+    if (!fileInput || !loadButton || !renderer || !container || !detectButton || !obfuscateButton || !detectionSummary || !detectionList || !selectAllCheckbox || !selectAllContainer) { return; }
 
     var pdfLoaderPromise = null;
     var activeWorkerSrc = PDFJS_WORKER_SRC;
@@ -114,6 +139,8 @@
     var renderedPages = [];
     var latestFindings = null;
     var documentFullText = "";
+    var selectionState = Object.create(null);
+    var activeRedactions = [];
 
     fileInput.addEventListener("change", function(){
       if (fileNameTarget) {
@@ -124,6 +151,10 @@
       detectionList.innerHTML = "";
       latestFindings = null;
       documentFullText = "";
+      activeRedactions = [];
+      clearSelections();
+      showSelectAllControls(false);
+      obfuscateButton.disabled = true;
     });
 
     loadButton.addEventListener("click", function(){
@@ -137,6 +168,10 @@
         return;
       }
       loadButton.blur();
+      clearSelections();
+      showSelectAllControls(false);
+      obfuscateButton.disabled = true;
+      activeRedactions = [];
       detectionSummary.textContent = "Renderizando PDF...";
       detectionList.innerHTML = "";
       container.classList.add("has-file");
@@ -174,6 +209,10 @@
         return;
       }
       detectButton.disabled = true;
+      clearSelections();
+      showSelectAllControls(false);
+      obfuscateButton.disabled = true;
+      activeRedactions = [];
       detectionSummary.textContent = "Analizando PDF en busca de datos sensibles...";
       detectionList.innerHTML = "";
 
@@ -218,6 +257,10 @@
           console.error(err);
           var message = err && err.message ? err.message : "Hubo un problema analizando el PDF.";
           detectionSummary.textContent = message;
+          activeRedactions = [];
+          clearSelections();
+          showSelectAllControls(false);
+          obfuscateButton.disabled = true;
           applyHighlights(null);
           if (!detectionList.innerHTML) {
             detectionList.innerHTML = '<li class="detection-empty">No fue posible analizar el documento.</li>';
@@ -228,6 +271,68 @@
         });
     });
 
+    obfuscateButton.addEventListener("click", function(){
+      if (!latestFindings || !latestFindings.length) {
+        alert("Detecta los datos sensibles antes de emborronarlos.");
+        return;
+      }
+      var selectedValues = getSelectedValues();
+      obfuscateButton.blur();
+      applyHighlights(latestFindings, { redactionTerms: selectedValues });
+      if (detectionSummary) {
+        var baseMessage = (detectionSummary.dataset && detectionSummary.dataset.baseMessage) ? detectionSummary.dataset.baseMessage : detectionSummary.textContent;
+        if (detectionSummary.dataset) {
+          detectionSummary.dataset.baseMessage = baseMessage;
+        }
+        if (baseMessage) {
+          var suffix = selectedValues.length
+            ? "Se emborronaron " + selectedValues.length + " coincidencia(s) seleccionada(s)."
+            : "No se seleccionaron coincidencias para emborronar.";
+          detectionSummary.textContent = baseMessage + " · " + suffix;
+        }
+      }
+    });
+
+    detectionList.addEventListener("change", function(event){
+      var target = event.target;
+      if (!target || !target.matches('input[data-entry-key]')) { return; }
+      var key = target.getAttribute("data-entry-key");
+      if (!key) { return; }
+      var entry = selectionState[key];
+      if (!entry) {
+        var decoded = decodeEntryKey(key);
+        selectionState[key] = {
+          label: decoded.label || "",
+          value: (decoded.value || "").trim(),
+          selected: target.checked
+        };
+      } else {
+        entry.selected = target.checked;
+      }
+      updateSelectAllUi();
+      if (detectionSummary && detectionSummary.dataset && detectionSummary.dataset.baseMessage) {
+        detectionSummary.textContent = detectionSummary.dataset.baseMessage;
+      }
+    });
+
+    selectAllCheckbox.addEventListener("change", function(){
+      var checked = !!selectAllCheckbox.checked;
+      var keys = Object.keys(selectionState);
+      if (keys.length) {
+        keys.forEach(function(key){
+          if (!selectionState[key]) { return; }
+          selectionState[key].selected = checked;
+        });
+      }
+      detectionList.querySelectorAll('input[data-entry-key]').forEach(function(input){
+        input.checked = checked;
+      });
+      selectAllCheckbox.indeterminate = false;
+      if (detectionSummary && detectionSummary.dataset && detectionSummary.dataset.baseMessage) {
+        detectionSummary.textContent = detectionSummary.dataset.baseMessage;
+      }
+    });
+
     window.addEventListener("beforeunload", destroyCurrentPdf);
 
     function processSensitiveData(fullText){
@@ -236,6 +341,10 @@
         detectionSummary.textContent = "No se detectaron patrones sensibles evidentes.";
         detectionList.innerHTML = '<li class="detection-empty">Sin coincidencias.</li>';
         applyHighlights(null);
+        activeRedactions = [];
+        clearSelections();
+        showSelectAllControls(false);
+        obfuscateButton.disabled = true;
         return Promise.resolve();
       }
       detectionSummary.textContent = "Validando coincidencias con IA...";
@@ -244,24 +353,40 @@
         .then(function(aiData){
           if (aiData && aiData.sensitive && aiData.sensitive.length) {
             var grouped = groupByLabel(aiData.sensitive);
-            renderResultsList(grouped, detectionList, { showReason: true });
+            prepareSelectionState(grouped);
+            renderResultsList(grouped, detectionList, { showReason: true, withSelection: true });
+            updateSelectAllUi();
+            showSelectAllControls(true);
+            obfuscateButton.disabled = false;
+            activeRedactions = [];
             var total = grouped.reduce(function(acc, item){
               return acc + (item.entries ? item.entries.length : 0);
             }, 0);
             var note = aiData.model ? " (modelo " + aiData.model + ")" : "";
             detectionSummary.textContent = "La IA confirmo " + total + " posible(s) dato(s) sensible(s)" + note + ".";
-            applyHighlights(grouped);
+            detectionSummary.dataset.baseMessage = detectionSummary.textContent;
+            applyHighlights(grouped, { redactionTerms: [] });
             return;
           }
           detectionSummary.textContent = "La IA no identifico datos sensibles en el documento.";
           detectionList.innerHTML = '<li class="detection-empty">Sin coincidencias confirmadas por IA.</li>';
+          activeRedactions = [];
+          clearSelections();
+          showSelectAllControls(false);
+          obfuscateButton.disabled = true;
           applyHighlights(null);
         })
         .catch(function(err){
           console.error(err);
           detectionSummary.textContent = "Fallo la validacion con IA (" + err.message + "). Se muestran coincidencias basicas.";
-          renderResultsList(groups, detectionList, { showReason: false });
-          applyHighlights(groups);
+          detectionSummary.dataset.baseMessage = detectionSummary.textContent;
+          prepareSelectionState(groups);
+          renderResultsList(groups, detectionList, { showReason: false, withSelection: true });
+          updateSelectAllUi();
+          showSelectAllControls(true);
+          obfuscateButton.disabled = false;
+          activeRedactions = [];
+          applyHighlights(groups, { redactionTerms: [] });
         });
     }
 
@@ -379,8 +504,11 @@
       }
       var maxPerLabel = options && options.maxPerLabel ? options.maxPerLabel : 10;
       var showReason = !!(options && options.showReason);
+      var withSelection = options && Object.prototype.hasOwnProperty.call(options, "withSelection") ? !!options.withSelection : true;
       var html = groups.map(function(group){
-        var entriesHtml = group.entries.slice(0, maxPerLabel).map(function(entry){
+        var safeLabel = escapeHtml(group.label || "");
+        var entries = group.entries ? group.entries.slice(0, maxPerLabel) : [];
+        var valuesHtml = entries.map(function(entry){
           var details = [];
           if (showReason && entry.reason) {
             details.push(entry.reason);
@@ -389,11 +517,133 @@
             details.push("Confianza: " + entry.confidence);
           }
           var detailHtml = details.length ? '<div class="detection-reason">' + escapeHtml(details.join(". ")) + '</div>' : "";
-          return "<div>" + escapeHtml(entry.value) + detailHtml + "</div>";
+          var valueText = entry && entry.value ? entry.value : "";
+          if (withSelection) {
+            var key = buildEntryKey(group.label || "", valueText);
+            var entryState = selectionState[key];
+            var isChecked = entryState ? !!entryState.selected : false;
+            var checkedAttr = isChecked ? " checked" : "";
+            return '<label class="detection-option"><input type="checkbox" class="detection-checkbox" data-entry-key="' + escapeHtml(key) + '"' + checkedAttr + ' /><span>' + escapeHtml(valueText) + detailHtml + '</span></label>';
+          }
+          return '<div>' + escapeHtml(valueText) + detailHtml + '</div>';
         }).join("");
-        return '<li><span class="detection-tag">' + escapeHtml(group.label) + '</span>' + entriesHtml + '</li>';
+        return '<li><div class="detection-item"><span class="detection-tag">' + safeLabel + '</span><div class="detection-values">' + valuesHtml + '</div></div></li>';
       }).join("");
       listEl.innerHTML = html;
+    }
+
+    function prepareSelectionState(groups){
+      selectionState = Object.create(null);
+      if (!groups || !groups.length) { return; }
+      groups.forEach(function(group){
+        if (!group || !group.entries) { return; }
+        group.entries.forEach(function(entry){
+          if (!entry || !entry.value) { return; }
+          var key = buildEntryKey(group.label || "", entry.value);
+          selectionState[key] = {
+            label: group.label || "",
+            value: (entry.value || "").trim(),
+            selected: true
+          };
+        });
+      });
+    }
+
+    function clearSelections(){
+      selectionState = Object.create(null);
+      detectionList.querySelectorAll('input[data-entry-key]').forEach(function(input){
+        input.checked = false;
+      });
+      if (selectAllCheckbox) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+      }
+      if (selectAllContainer) {
+        selectAllContainer.classList.add("is-hidden");
+      }
+      if (detectionSummary && detectionSummary.dataset) {
+        delete detectionSummary.dataset.baseMessage;
+      }
+    }
+
+    function updateSelectAllUi(){
+      if (!selectAllCheckbox) { return; }
+      var keys = Object.keys(selectionState);
+      if (!keys.length) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+        return;
+      }
+      var selectedCount = 0;
+      keys.forEach(function(key){
+        var entry = selectionState[key];
+        if (entry && entry.selected) {
+          selectedCount++;
+        }
+      });
+      if (selectedCount === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+      } else if (selectedCount === keys.length) {
+        selectAllCheckbox.checked = true;
+        selectAllCheckbox.indeterminate = false;
+      } else {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = true;
+      }
+    }
+
+    function showSelectAllControls(show){
+      if (!selectAllContainer) { return; }
+      if (show) {
+        selectAllContainer.classList.remove("is-hidden");
+      } else {
+        selectAllContainer.classList.add("is-hidden");
+      }
+    }
+
+    function buildEntryKey(label, value){
+      return encodeURIComponent(label || "") + "::" + encodeURIComponent(value || "");
+    }
+
+    function decodeEntryKey(key){
+      if (!key) { return { label: "", value: "" }; }
+      var parts = key.split("::");
+      var label = "";
+      var value = "";
+      if (parts.length) {
+        try {
+          label = decodeURIComponent(parts[0] || "");
+        } catch (err) {
+          label = parts[0] || "";
+        }
+        if (parts.length > 1) {
+          try {
+            value = decodeURIComponent(parts.slice(1).join("::"));
+          } catch (error) {
+            value = parts.slice(1).join("::");
+          }
+        }
+      }
+      return { label: label, value: value };
+    }
+
+    function getSelectedValues(){
+      var values = [];
+      var seen = Object.create(null);
+      Object.keys(selectionState).forEach(function(key){
+        var entry = selectionState[key];
+        if (!entry || !entry.selected) { return; }
+        var value = entry.value ? entry.value.trim() : "";
+        if (value) {
+          var normalized = normalizeTerm(value);
+          if (!seen[normalized]) {
+            seen[normalized] = true;
+            values.push(value);
+          }
+        }
+      });
+      return values;
     }
 
     function getCsrfToken(){
@@ -417,6 +667,7 @@
       container.classList.remove("has-file");
       renderedPages = [];
       latestFindings = null;
+      activeRedactions = [];
     }
 
     function destroyCurrentPdf(){
@@ -583,9 +834,16 @@
       return output;
     }
 
-    function applyHighlights(findings){
+    function applyHighlights(findings, options){
       latestFindings = findings && findings.length ? findings : null;
+      if (!latestFindings) {
+        activeRedactions = [];
+      }
+      if (options && Object.prototype.hasOwnProperty.call(options, "redactionTerms")) {
+        activeRedactions = Array.isArray(options.redactionTerms) ? options.redactionTerms.slice() : [];
+      }
       var terms = extractHighlightTerms(latestFindings);
+      var redactionLookup = createRedactionLookup(activeRedactions);
       renderedPages.forEach(function(page){
         if (!page || !page.textDivs) { return; }
         page.textDivs.forEach(function(div){
@@ -596,7 +854,7 @@
             }
             return;
           }
-          var highlighted = buildHighlightedHtml(original, terms);
+          var highlighted = buildHighlightedHtml(original, terms, redactionLookup);
           if (highlighted.changed) {
             div.innerHTML = highlighted.html;
           } else if (div.textContent !== original) {
@@ -627,7 +885,7 @@
       return terms;
     }
 
-    function buildHighlightedHtml(text, terms){
+    function buildHighlightedHtml(text, terms, redactionLookup){
       if (!terms.length) {
         return { html: escapeHtml(text), changed: false };
       }
@@ -651,7 +909,13 @@
         if (index > lastIndex) {
           pieces.push(escapeHtml(text.slice(lastIndex, index)));
         }
-        pieces.push('<span class="pdf-highlight">' + escapeHtml(match[0]) + '</span>');
+        var matchText = match[0];
+        var normalized = normalizeTerm(matchText);
+        var classNames = "pdf-highlight";
+        if (redactionLookup && redactionLookup[normalized]) {
+          classNames += " pdf-redaction";
+        }
+        pieces.push('<span class="' + classNames + '">' + escapeHtml(matchText) + '</span>');
         lastIndex = index + match[0].length;
         changed = true;
       }
@@ -662,6 +926,25 @@
         pieces.push(escapeHtml(text.slice(lastIndex)));
       }
       return { html: pieces.join(""), changed: true };
+    }
+
+    function createRedactionLookup(terms){
+      var lookup = Object.create(null);
+      if (!terms || !terms.length) {
+        return lookup;
+      }
+      for (var i = 0; i < terms.length; i++) {
+        var normalized = normalizeTerm(terms[i]);
+        if (normalized) {
+          lookup[normalized] = true;
+        }
+      }
+      return lookup;
+    }
+
+    function normalizeTerm(value){
+      if (value === null || value === undefined) { return ""; }
+      return String(value).trim().toLowerCase();
     }
 
     function escapeRegExp(value){
