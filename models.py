@@ -11,7 +11,7 @@ from sqlalchemy import (
     create_engine,
     select,
 )
-from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker, synonym
 from werkzeug.security import generate_password_hash, check_password_hash
 import enum
 import os
@@ -51,6 +51,8 @@ class User(Base, UserMixin):
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=True)
     supervisor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Alias para compatibilidad con naming usado en formularios y tests
+    responsible_id = synonym("supervisor_id")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     attendances = relationship("Attendance", back_populates="user")
@@ -67,6 +69,8 @@ class User(Base, UserMixin):
         back_populates="direct_reports",
         foreign_keys="User.supervisor_id",
     )
+    # Alias para compatibilidad con formularios/templates
+    responsible = synonym("supervisor")
     direct_reports = relationship(
         "User",
         back_populates="supervisor",
@@ -127,6 +131,8 @@ class Area(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(120), nullable=False, unique=True)
     manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Alias utilizado en validaciones de ausencias y vistas antiguas
+    cap_id = synonym("manager_id")
     users = relationship("User", back_populates="area", foreign_keys="User.area_id")
     groups = relationship("Group", back_populates="area")
     manager = relationship(
@@ -134,6 +140,8 @@ class Area(Base):
         back_populates="managed_areas",
         foreign_keys=[manager_id],
     )
+    # Alias para el objeto manager
+    cap = synonym("manager")
 
 
 class Group(Base):
