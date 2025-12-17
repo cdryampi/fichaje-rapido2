@@ -1416,6 +1416,40 @@ def info_page():
     return render_template("info.html")
 
 
+@app.route("/firmas")
+@login_required
+def firmas_page():
+    pending_signatures = [
+        {
+            "title": "Normas de teletrabajo 2025",
+            "description": "Actualiza tu compromiso de teletrabajo y confirma que conoces las nuevas franjas de disponibilidad.",
+            "deadline": "31/10/2025",
+            "owner": "RRHH",
+        },
+        {
+            "title": "Declaracion de confidencialidad",
+            "description": "Documento obligatorio para acceder a la nueva plataforma de clientes.",
+            "deadline": "05/11/2025",
+            "owner": "Seguridad",
+        },
+    ]
+    recent_signatures = [
+        {"title": "Politica de dispositivos", "signed_on": "12/10/2025", "owner": "IT"},
+        {"title": "Prevencion de riesgos 2025", "signed_on": "28/09/2025", "owner": "RRHH"},
+    ]
+    steps = [
+        {"title": "1. Descarga", "text": "Revisa cada documento antes de firmarlo; se abre en una nueva pestaña."},
+        {"title": "2. Firma digital", "text": "Utiliza tu certificado o la firma manuscrita sobre pantalla si estÇ?s en un dispositivo tÇ?ctil."},
+        {"title": "3. EnvÇða adjunto", "text": "Sube el PDF firmado o envÇ?a la captura desde el botÇün habilitado."},
+    ]
+    return render_template(
+        "firmas.html",
+        pending=pending_signatures,
+        recent=recent_signatures,
+        steps=steps,
+    )
+
+
 @app.route("/cementerio", methods=["GET", "POST"])
 @login_required
 def cementerio_page():

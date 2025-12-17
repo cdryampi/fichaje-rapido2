@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row" style="display:flex;flex-direction:column;gap:16px;">
+  <div class="card">
+    <div class="header" style="align-items:flex-start;">
+      <div>
+        <h2>Firmas pendientes</h2>
+        <p class="muted">En cuanto firmes un documento quedará disponible para RRHH de forma automática.</p>
+      </div>
+      <span class="pill pill-out">{{ pending|length }} pendientes</span>
+    </div>
+    {% if pending %}
+    <ul class="hist">
+      {% for item in pending %}
+      <li style="flex-direction:column;align-items:flex-start;">
+        <div style="display:flex;gap:8px;align-items:center;width:100%;justify-content:space-between;">
+          <strong>{{ item.title }}</strong>
+          <span class="pill pill-in">Hasta {{ item.deadline }}</span>
+        </div>
+        <p class="muted" style="margin:4px 0 8px 0;">{{ item.description }}</p>
+        <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;width:100%;">
+          <small class="muted">Solicitado por {{ item.owner }}</small>
+          <div class="actions-right">
+            <button type="button" class="btn btn-small btn-outline">Descargar</button>
+            <button type="button" class="btn btn-small btn-green">Subir firmado</button>
+          </div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No tienes firmas pendientes. Buen trabajo.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="header">
+      <h2>Firmas recientes</h2>
+    </div>
+    {% if recent %}
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left;border-bottom:1px solid #eee;">
+          <th style="padding:8px 0;">Documento</th>
+          <th style="padding:8px 0;">Firmado</th>
+          <th style="padding:8px 0;">Departamento</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in recent %}
+        <tr style="border-bottom:1px solid #f3f3f3;">
+          <td style="padding:8px 0;">{{ item.title }}</td>
+          <td style="padding:8px 0;">{{ item.signed_on }}</td>
+          <td style="padding:8px 0;">{{ item.owner }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Todavía no has firmado documentos este trimestre.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="header">
+      <h2>Como funciona?</h2>
+    </div>
+    <div style="display:grid;gap:12px;">
+      {% for step in steps %}
+      <div style="padding:10px 12px;border:1px solid #e5e5e5;border-radius:10px;">
+        <strong>{{ step.title }}</strong>
+        <p class="muted" style="margin:4px 0 0 0;">{{ step.text }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
