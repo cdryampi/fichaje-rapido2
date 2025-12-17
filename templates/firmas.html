@@ -1,78 +1,349 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="row" style="display:flex;flex-direction:column;gap:16px;">
+<style>
+  .signature-builder{display:flex;flex-direction:column;gap:16px}
+  .signature-columns{display:flex;flex-direction:column;gap:16px}
+  .signature-preview{border:1px solid #e1e1e1;border-radius:12px;padding:20px;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#111;min-height:220px}
+  .signature-preview table{width:100%;border-collapse:collapse}
+  .signature-preview td{vertical-align:top;font-size:14px;line-height:1.5}
+  .signature-preview .cta-link{display:inline-block;margin-top:12px;padding:10px 18px;border-radius:999px;font-weight:600;text-decoration:none}
+  .signature-preview .social-pill{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:999px;font-size:12px;color:#fff;margin-right:6px;text-decoration:none}
+  .signature-preview .disclaimer{margin-top:16px;font-size:11px;color:#666}
+  .sig-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  .sig-grid label{display:flex;flex-direction:column;font-size:13px;font-weight:600;color:#333}
+  .sig-grid label input,.sig-grid label textarea{margin-top:6px;padding:10px;border-radius:8px;border:1px solid #ccc;font:inherit}
+  .sig-grid label textarea{min-height:70px;resize:vertical}
+  .sig-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+  .sig-actions button{flex:0 0 auto}
+  .sig-toast{font-size:13px;color:#14a44d}
+  .sig-preset-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+  .sig-preset{border:1px solid #e5e5e5;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+  .sig-swatches{display:flex;flex-wrap:wrap;gap:10px}
+  .sig-swatch{border:none;border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
+  .sig-swatch span{font-size:12px;font-weight:400}
+  .sig-html{width:100%;min-height:140px;border-radius:10px;border:1px solid #ccc;padding:12px;font-family:ui-monospace,Consolas,monospace;font-size:13px;margin-top:12px}
+  .sig-social-labels{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:12px}
+  .sig-social-labels label{font-size:13px;font-weight:600;color:#333;display:flex;flex-direction:column}
+  .sig-social-labels input{margin-top:6px;padding:10px;border-radius:8px;border:1px solid #ccc;font:inherit}
+  @media (min-width: 960px){
+    .signature-columns{flex-direction:row}
+    .signature-columns > .card{flex:1}
+  }
+</style>
+<div class="signature-builder">
   <div class="card">
     <div class="header" style="align-items:flex-start;">
       <div>
-        <h2>Firmas pendientes</h2>
-        <p class="muted">En cuanto firmes un documento quedará disponible para RRHH de forma automática.</p>
+        <h2>Generador de firmas de correo</h2>
+        <p class="muted">Prototipo para el nuevo proyecto independiente de firmas corporativas estilo HubSpot.</p>
       </div>
-      <span class="pill pill-out">{{ pending|length }} pendientes</span>
+      <div>
+        <button type="button" class="btn btn-small btn-outline" data-copy-html>Copiar HTML</button>
+      </div>
     </div>
-    {% if pending %}
-    <ul class="hist">
-      {% for item in pending %}
-      <li style="flex-direction:column;align-items:flex-start;">
-        <div style="display:flex;gap:8px;align-items:center;width:100%;justify-content:space-between;">
-          <strong>{{ item.title }}</strong>
-          <span class="pill pill-in">Hasta {{ item.deadline }}</span>
-        </div>
-        <p class="muted" style="margin:4px 0 8px 0;">{{ item.description }}</p>
-        <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;width:100%;">
-          <small class="muted">Solicitado por {{ item.owner }}</small>
-          <div class="actions-right">
-            <button type="button" class="btn btn-small btn-outline">Descargar</button>
-            <button type="button" class="btn btn-small btn-green">Subir firmado</button>
-          </div>
-        </div>
-      </li>
+    <ul class="hist" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;">
+      {% for feature in features %}
+      <li style="border:none;padding:0;background:#f5f5f5;border-radius:999px;padding:6px 12px;font-weight:600;">{{ feature }}</li>
       {% endfor %}
     </ul>
-    {% else %}
-    <p>No tienes firmas pendientes. Buen trabajo.</p>
-    {% endif %}
   </div>
 
-  <div class="card">
-    <div class="header">
-      <h2>Firmas recientes</h2>
+  <div class="signature-columns">
+    <div class="card">
+      <h3>Configura datos</h3>
+      <form id="signature-form">
+        <div class="sig-grid">
+          <label>Nombre completo
+            <input type="text" name="full_name" value="{{ defaults.full_name }}" required>
+          </label>
+          <label>Cargo
+            <input type="text" name="role" value="{{ defaults.role }}">
+          </label>
+          <label>Empresa
+            <input type="text" name="company" value="{{ defaults.company }}">
+          </label>
+        </div>
+        <div class="sig-grid">
+          <label>Telefono
+            <input type="text" name="phone" value="{{ defaults.phone }}">
+          </label>
+          <label>Movil
+            <input type="text" name="mobile" value="{{ defaults.mobile }}">
+          </label>
+          <label>Correo
+            <input type="email" name="email" value="{{ defaults.email }}">
+          </label>
+          <label>Sitio web
+            <input type="text" name="website" value="{{ defaults.website }}">
+          </label>
+        </div>
+        <div class="sig-grid">
+          <label>Logo (URL)
+            <input type="url" name="logo_url" value="{{ defaults.logo_url }}">
+          </label>
+          <label>CTA texto
+            <input type="text" name="cta_label" value="{{ defaults.cta_label }}">
+          </label>
+          <label>CTA enlace
+            <input type="url" name="cta_url" value="{{ defaults.cta_url }}">
+          </label>
+        </div>
+        <div class="sig-grid">
+          <label>Banner inferior
+            <textarea name="banner_text">{{ defaults.banner_text }}</textarea>
+          </label>
+          <label>Clausula / disclaimer
+            <textarea name="disclaimer">{{ defaults.disclaimer }}</textarea>
+          </label>
+        </div>
+        <div class="sig-grid" style="align-items:end;">
+          <label>Color principal
+            <input type="color" name="primary_color" value="{{ defaults.primary_color }}">
+          </label>
+          <label>Color acento
+            <input type="color" name="accent_color" value="{{ defaults.accent_color }}">
+          </label>
+        </div>
+        <div>
+          <h4>Redes</h4>
+          <div class="sig-social-labels">
+            {% for social in social_networks %}
+            <label>{{ social.label }}
+              <input type="url" name="{{ social.key }}" value="{{ defaults[social.key] }}" placeholder="{{ social.placeholder }}">
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </form>
     </div>
-    {% if recent %}
-    <table style="width:100%;border-collapse:collapse;">
-      <thead>
-        <tr style="text-align:left;border-bottom:1px solid #eee;">
-          <th style="padding:8px 0;">Documento</th>
-          <th style="padding:8px 0;">Firmado</th>
-          <th style="padding:8px 0;">Departamento</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in recent %}
-        <tr style="border-bottom:1px solid #f3f3f3;">
-          <td style="padding:8px 0;">{{ item.title }}</td>
-          <td style="padding:8px 0;">{{ item.signed_on }}</td>
-          <td style="padding:8px 0;">{{ item.owner }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <p class="muted">Todavía no has firmado documentos este trimestre.</p>
-    {% endif %}
-  </div>
 
-  <div class="card">
-    <div class="header">
-      <h2>Como funciona?</h2>
-    </div>
-    <div style="display:grid;gap:12px;">
-      {% for step in steps %}
-      <div style="padding:10px 12px;border:1px solid #e5e5e5;border-radius:10px;">
-        <strong>{{ step.title }}</strong>
-        <p class="muted" style="margin:4px 0 0 0;">{{ step.text }}</p>
+    <div class="card">
+      <h3>Vista previa en vivo</h3>
+      <div class="signature-preview" data-signature-preview></div>
+      <textarea class="sig-html" readonly data-html-output></textarea>
+      <div class="sig-actions">
+        <button type="button" class="btn btn-small btn-green" data-copy-html>Copiar HTML</button>
+        <button type="button" class="btn btn-small btn-outline" data-download-html>Descargar HTML</button>
+        <span class="sig-toast" data-copy-toast hidden>HTML copiado al portapapeles.</span>
       </div>
+      <p class="muted" style="margin-top:6px;">Pega este bloque en Gmail, Outlook o en las directrices internas del equipo.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="header">
+      <h3>Plantillas rapidas</h3>
+      <p class="muted">Carga un set predefinido para probar variaciones.</p>
+    </div>
+    <div class="sig-preset-grid">
+      {% for preset in signature_presets %}
+      <div class="sig-preset">
+        <strong>{{ preset.name }}</strong>
+        <p class="muted" style="margin:0;">{{ preset.description }}</p>
+        <button type="button" class="btn btn-small" data-load-preset="{{ loop.index0 }}">Usar esta</button>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="header">
+      <h3>Paletas sugeridas</h3>
+      <p class="muted">Haz clic para aplicar combinaciones coherentes.</p>
+    </div>
+    <div class="sig-swatches">
+      {% for palette in color_presets %}
+      <button type="button" class="sig-swatch" data-color-preset data-primary="{{ palette.primary }}" data-accent="{{ palette.accent }}">
+        {{ palette.label }}
+        <span>Principal: {{ palette.primary }}</span>
+        <span>Acento: {{ palette.accent }}</span>
+      </button>
       {% endfor %}
     </div>
   </div>
 </div>
+<script>
+(function(){
+  const form = document.getElementById('signature-form');
+  if (!form) { return; }
+  const preview = document.querySelector('[data-signature-preview]');
+  const htmlOutput = document.querySelector('[data-html-output]');
+  const copyButtons = document.querySelectorAll('[data-copy-html]');
+  const downloadButton = document.querySelector('[data-download-html]');
+  const toast = document.querySelector('[data-copy-toast]');
+  const SOCIAL_FIELDS = {{ social_networks|tojson }};
+  const PRESETS = {{ signature_presets|tojson }};
+  const DEFAULTS = {{ defaults|tojson }};
+
+  const socialKeys = SOCIAL_FIELDS.map(item => item.key);
+
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/`/g, '&#96;');
+  }
+
+  function normalizeUrl(value) {
+    if (!value) { return ''; }
+    if (/^https?:/i.test(value)) {
+      return value;
+    }
+    return 'https://' + value.replace(/^\/*/, '');
+  }
+
+  function collectData() {
+    const data = {};
+    Array.from(form.elements).forEach(el => {
+      if (!el.name) { return; }
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        if (!el.checked) { return; }
+      }
+      data[el.name] = typeof el.value === 'string' ? el.value.trim() : el.value;
+    });
+    socialKeys.forEach(key => {
+      data[key] = data[key] || '';
+    });
+    return data;
+  }
+
+  function buildSignatureHtml(data) {
+    const safe = value => escapeHtml(value);
+    const name = safe(data.full_name || '');
+    const roleCompany = [data.role, data.company].filter(Boolean).map(safe).join(' | ');
+    const contactChunks = [];
+    if (data.phone) {
+      contactChunks.push(`Tel: <a href="tel:${escapeAttr(data.phone)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.phone)}</a>`);
+    }
+    if (data.mobile) {
+      contactChunks.push(`Movil: <a href="tel:${escapeAttr(data.mobile)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.mobile)}</a>`);
+    }
+    if (data.email) {
+      contactChunks.push(`<a href="mailto:${escapeAttr(data.email)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.email)}</a>`);
+    }
+    if (data.website) {
+      const normalized = normalizeUrl(data.website);
+      contactChunks.push(`<a href="${escapeAttr(normalized)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.website)}</a>`);
+    }
+    const contactHtml = contactChunks.join(' · ');
+    const socialHtml = socialKeys.map(key => {
+      const url = data[key];
+      if (!url) { return ''; }
+      const normalized = normalizeUrl(url);
+      const label = SOCIAL_FIELDS.find(item => item.key === key)?.label || key;
+      const letter = escapeHtml(label.charAt(0));
+      return `<a href="${escapeAttr(normalized)}" class="social-pill" style="background:${escapeAttr(data.primary_color)};" target="_blank" rel="noopener">${letter}</a>`;
+    }).filter(Boolean).join('');
+    const ctaHtml = (data.cta_label && data.cta_url) ? `<a href="${escapeAttr(normalizeUrl(data.cta_url))}" class="cta-link" style="background:${escapeAttr(data.primary_color)};color:#fff;" target="_blank" rel="noopener">${safe(data.cta_label)}</a>` : '';
+    const logoHtml = data.logo_url ? `<img src="${escapeAttr(data.logo_url)}" alt="Logo" style="width:96px;height:96px;border-radius:12px;object-fit:cover;">` : '';
+    const bannerHtml = data.banner_text ? `<div style="margin-top:14px;padding:10px 14px;border-radius:10px;background:${escapeAttr(data.primary_color)}10;color:${escapeAttr(data.accent_color)};border:1px solid ${escapeAttr(data.primary_color)}33;">${safe(data.banner_text)}</div>` : '';
+    const disclaimerHtml = data.disclaimer ? `<div class="disclaimer">${safe(data.disclaimer)}</div>` : '';
+
+    return `
+<table cellpadding="0" cellspacing="0">
+  <tr>
+    <td style="padding-right:18px;border-right:2px solid ${escapeAttr(data.primary_color)};">
+      <div style="font-size:18px;font-weight:700;color:${escapeAttr(data.primary_color)};">${name}</div>
+      <div style="font-size:13px;color:${escapeAttr(data.accent_color)};">${roleCompany}</div>
+      <div style="margin-top:10px;font-size:12px;color:${escapeAttr(data.accent_color)};">${contactHtml}</div>
+      ${ctaHtml}
+      <div style="margin-top:12px;">${socialHtml}</div>
+      ${bannerHtml}
+      ${disclaimerHtml}
+    </td>
+    <td style="padding-left:18px;">${logoHtml}</td>
+  </tr>
+</table>`.trim();
+  }
+
+  function update() {
+    const data = collectData();
+    const html = buildSignatureHtml(data);
+    if (preview) {
+      preview.innerHTML = html;
+    }
+    if (htmlOutput) {
+      htmlOutput.value = html;
+    }
+  }
+
+  function applyData(data) {
+    Object.entries(data).forEach(([key, value]) => {
+      const field = form.elements.namedItem(key);
+      if (!field) { return; }
+      const isRadioList = typeof RadioNodeList !== 'undefined' && field instanceof RadioNodeList;
+      if (isRadioList) {
+        field.value = value || '';
+        return;
+      }
+      field.value = value || '';
+    });
+  }
+
+  form.addEventListener('input', update);
+  form.addEventListener('change', update);
+
+  document.querySelectorAll('[data-color-preset]').forEach(button => {
+    button.addEventListener('click', () => {
+      const primary = button.getAttribute('data-primary');
+      const accent = button.getAttribute('data-accent');
+      if (form.elements.primary_color && primary) {
+        form.elements.primary_color.value = primary;
+      }
+      if (form.elements.accent_color && accent) {
+        form.elements.accent_color.value = accent;
+      }
+      update();
+    });
+  });
+
+  document.querySelectorAll('[data-load-preset]').forEach(button => {
+    button.addEventListener('click', () => {
+      const index = parseInt(button.getAttribute('data-load-preset'), 10);
+      const preset = PRESETS[index];
+      if (!preset) { return; }
+      applyData(preset.data);
+      update();
+    });
+  });
+
+  copyButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!htmlOutput) { return; }
+      navigator.clipboard.writeText(htmlOutput.value).then(() => {
+        if (toast) {
+          toast.hidden = false;
+          setTimeout(() => { toast.hidden = true; }, 2000);
+        }
+      }).catch(() => {});
+    });
+  });
+
+  if (downloadButton) {
+    downloadButton.addEventListener('click', () => {
+      if (!htmlOutput) { return; }
+      const blob = new Blob([htmlOutput.value], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'firma-email.html';
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        link.remove();
+      }, 0);
+    });
+  }
+
+  applyData(DEFAULTS);
+  update();
+})();
+</script>
 {% endblock %}

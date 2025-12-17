@@ -1419,34 +1419,103 @@ def info_page():
 @app.route("/firmas")
 @login_required
 def firmas_page():
-    pending_signatures = [
+    defaults = {
+        "full_name": "Laura Martinez",
+        "role": "Head of Customer Success",
+        "company": "Fichaje Labs",
+        "phone": "+34 900 123 456",
+        "mobile": "+34 600 123 123",
+        "email": "laura.martinez@fichaje.com",
+        "website": "www.fichaje.com",
+        "logo_url": "https://dummyimage.com/96x96/0a84ff/ffffff.png&text=FR",
+        "cta_label": "Agenda una demo",
+        "cta_url": "https://calendly.com/fichaje/demo",
+        "banner_text": "Impulsa la identidad visual en cada correo.",
+        "primary_color": "#0A84FF",
+        "accent_color": "#111827",
+        "disclaimer": "Este pie de firma se genera automaticamente para la prueba de proyecto independiente.",
+        "linkedin": "https://www.linkedin.com/company/fichaje",
+        "twitter": "https://twitter.com/fichaje",
+        "instagram": "",
+        "youtube": "",
+    }
+    color_presets = [
+        {"label": "Azul corporativo", "primary": "#0A84FF", "accent": "#111827"},
+        {"label": "Verde sostenible", "primary": "#0B8A6A", "accent": "#0F2A1C"},
+        {"label": "Naranja creativo", "primary": "#FF7A18", "accent": "#2D1600"},
+        {"label": "Neutro elegante", "primary": "#3C3C3C", "accent": "#939393"},
+    ]
+    social_networks = [
+        {"key": "linkedin", "label": "LinkedIn", "placeholder": "https://linkedin.com/in/tu-nombre"},
+        {"key": "twitter", "label": "Twitter", "placeholder": "https://x.com/usuario"},
+        {"key": "instagram", "label": "Instagram", "placeholder": "https://instagram.com/usuario"},
+        {"key": "youtube", "label": "YouTube", "placeholder": "https://youtube.com/@canal"},
+    ]
+    signature_presets = [
         {
-            "title": "Normas de teletrabajo 2025",
-            "description": "Actualiza tu compromiso de teletrabajo y confirma que conoces las nuevas franjas de disponibilidad.",
-            "deadline": "31/10/2025",
-            "owner": "RRHH",
+            "name": "Clasica corporativa",
+            "description": "Formato base recomendado para equipos comerciales.",
+            "data": dict(defaults),
         },
         {
-            "title": "Declaracion de confidencialidad",
-            "description": "Documento obligatorio para acceder a la nueva plataforma de clientes.",
-            "deadline": "05/11/2025",
-            "owner": "Seguridad",
+            "name": "Campana marketing",
+            "description": "Incluye banner promocional y colores brillantes.",
+            "data": dict(
+                defaults,
+                full_name="Daniel Rios",
+                role="Marketing Lead",
+                company="Growfy",
+                phone="+34 933 123 999",
+                mobile="+34 722 111 222",
+                email="daniel.rios@growfy.co",
+                website="growfy.co",
+                cta_label="Descarga el media kit",
+                cta_url="https://growfy.co/media-kit",
+                banner_text="Lanzamos nuevo reporte de tendencias 2026.",
+                primary_color="#FF6B2C",
+                accent_color="#1F1F1F",
+                logo_url="https://dummyimage.com/96x96/ff6b2c/ffffff.png&text=GR",
+                linkedin="https://www.linkedin.com/company/growfy",
+                twitter="https://twitter.com/growfyteam",
+                instagram="https://instagram.com/growfy_creative",
+            ),
+        },
+        {
+            "name": "Minimal startup",
+            "description": "Firma compacta enfocada en producto digital.",
+            "data": dict(
+                defaults,
+                full_name="Nora Vidal",
+                role="Product Manager",
+                company="Launchy",
+                phone="+34 910 001 002",
+                mobile="+34 611 202 303",
+                email="nora@launchy.app",
+                website="launchy.app",
+                cta_label="Probar gratis",
+                cta_url="https://app.launchy.app/signup",
+                banner_text="Gestiona tus lanzamientos desde Launchy.",
+                primary_color="#00B2A9",
+                accent_color="#062225",
+                logo_url="https://dummyimage.com/96x96/00b2a9/ffffff.png&text=LA",
+                linkedin="https://www.linkedin.com/company/launchy-app",
+                twitter="https://twitter.com/launchy_app",
+                youtube="https://youtube.com/@launchy",
+            ),
         },
     ]
-    recent_signatures = [
-        {"title": "Politica de dispositivos", "signed_on": "12/10/2025", "owner": "IT"},
-        {"title": "Prevencion de riesgos 2025", "signed_on": "28/09/2025", "owner": "RRHH"},
-    ]
-    steps = [
-        {"title": "1. Descarga", "text": "Revisa cada documento antes de firmarlo; se abre en una nueva pestaña."},
-        {"title": "2. Firma digital", "text": "Utiliza tu certificado o la firma manuscrita sobre pantalla si estÇ?s en un dispositivo tÇ?ctil."},
-        {"title": "3. EnvÇða adjunto", "text": "Sube el PDF firmado o envÇ?a la captura desde el botÇün habilitado."},
+    features = [
+        "Editor en vivo con vista previa real de la firma.",
+        "Controla colores, CTA y enlaces para equipos enteros.",
+        "Exporta HTML limpio listo para Gmail u Outlook.",
     ]
     return render_template(
         "firmas.html",
-        pending=pending_signatures,
-        recent=recent_signatures,
-        steps=steps,
+        defaults=defaults,
+        color_presets=color_presets,
+        social_networks=social_networks,
+        signature_presets=signature_presets,
+        features=features,
     )
 
 
