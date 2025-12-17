@@ -9,6 +9,7 @@
   .signature-preview .cta-link{display:inline-block;margin-top:12px;padding:10px 18px;border-radius:999px;font-weight:600;text-decoration:none}
   .signature-preview .social-pill{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:999px;font-size:12px;color:#fff;margin-right:6px;text-decoration:none}
   .signature-preview .disclaimer{margin-top:16px;font-size:11px;color:#666}
+  .preview-card{position:sticky;top:16px;align-self:flex-start}
   .sig-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
   .sig-grid label{display:flex;flex-direction:column;font-size:13px;font-weight:600;color:#333}
   .sig-grid label input,.sig-grid label textarea{margin-top:6px;padding:10px;border-radius:8px;border:1px solid #ccc;font:inherit}
@@ -25,7 +26,6 @@
   .sig-social-labels{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:12px}
   .sig-social-labels label{font-size:13px;font-weight:600;color:#333;display:flex;flex-direction:column}
   .sig-social-labels input{margin-top:6px;padding:10px;border-radius:8px;border:1px solid #ccc;font:inherit}
-  .sig-photo-section,.sig-logo-section{margin-top:24px}
   .sig-photo-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
   .sig-photo-card{border:1px solid #e5e5e5;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center}
   .sig-photo-card img{width:80px;height:80px;border-radius:999px;object-fit:cover}
@@ -34,9 +34,16 @@
   .sig-logo-card img{max-width:160px;height:50px;object-fit:contain;background:#fff;border:1px dashed #dcdcdc;border-radius:8px;padding:6px}
   .sig-logo-card-actions{display:flex;flex-wrap:wrap;gap:8px}
   .sig-logo-card-actions button{flex:1 1 auto}
+  .sig-accordion{border:1px solid #e5e5e5;border-radius:12px;background:#fafafa;margin-bottom:12px}
+  .sig-accordion summary{cursor:pointer;list-style:none;padding:12px 14px;font-weight:700;display:flex;align-items:center;justify-content:space-between}
+  .sig-accordion summary::after{content:'+';font-size:18px;line-height:1}
+  .sig-accordion[open] summary::after{content:'-'}
+  .sig-accordion summary::-webkit-details-marker{display:none}
+  .sig-accordion-body{padding:0 16px 16px 16px}
   @media (min-width: 960px){
-    .signature-columns{flex-direction:row}
+    .signature-columns{flex-direction:row;align-items:flex-start}
     .signature-columns > .card{flex:1}
+    .preview-card{max-width:420px}
   }
 </style>
 <div class="signature-builder">
@@ -44,7 +51,7 @@
     <div class="header" style="align-items:flex-start;">
       <div>
         <h2>Generador de firmas de correo</h2>
-        <p class="muted">Prototipo para el nuevo proyecto independiente con multiples plantillas, fotos y logos.</p>
+        <p class="muted">Prototipo con vista previa fija, 10 plantillas y opciones de fotos y logos al estilo del generador de HubSpot.</p>
       </div>
       <div>
         <button type="button" class="btn btn-small btn-outline" data-copy-html>Copiar HTML</button>
@@ -58,125 +65,7 @@
   </div>
 
   <div class="signature-columns">
-    <div class="card">
-      <h3>Configura datos</h3>
-      <form id="signature-form">
-        <div class="sig-grid">
-          <label>Nombre completo
-            <input type="text" name="full_name" value="{{ defaults.full_name }}" required>
-          </label>
-          <label>Cargo
-            <input type="text" name="role" value="{{ defaults.role }}">
-          </label>
-          <label>Empresa
-            <input type="text" name="company" value="{{ defaults.company }}">
-          </label>
-        </div>
-        <div class="sig-grid">
-          <label>Telefono
-            <input type="text" name="phone" value="{{ defaults.phone }}">
-          </label>
-          <label>Movil
-            <input type="text" name="mobile" value="{{ defaults.mobile }}">
-          </label>
-          <label>Correo
-            <input type="email" name="email" value="{{ defaults.email }}">
-          </label>
-          <label>Sitio web
-            <input type="text" name="website" value="{{ defaults.website }}">
-          </label>
-        </div>
-        <div class="sig-grid">
-          <label>CTA texto
-            <input type="text" name="cta_label" value="{{ defaults.cta_label }}">
-          </label>
-          <label>CTA enlace
-            <input type="url" name="cta_url" value="{{ defaults.cta_url }}">
-          </label>
-          <label>Banner inferior
-            <textarea name="banner_text">{{ defaults.banner_text }}</textarea>
-          </label>
-          <label>Clausula / disclaimer
-            <textarea name="disclaimer">{{ defaults.disclaimer }}</textarea>
-          </label>
-        </div>
-        <div class="sig-grid">
-          <label>Foto de perfil (URL)
-            <input type="url" name="profile_photo_url" value="{{ defaults.profile_photo_url }}">
-          </label>
-          <label>Logo principal (URL)
-            <input type="url" name="logo_url" value="{{ defaults.logo_url }}">
-          </label>
-          <label>Logo secundario (URL)
-            <input type="url" name="logo_secondary_url" value="{{ defaults.logo_secondary_url }}">
-          </label>
-          <label>Logo terciario (URL)
-            <input type="url" name="logo_tertiary_url" value="{{ defaults.logo_tertiary_url }}">
-          </label>
-        </div>
-        <div class="sig-grid" style="align-items:end;">
-          <label>Color principal
-            <input type="color" name="primary_color" value="{{ defaults.primary_color }}">
-          </label>
-          <label>Color acento
-            <input type="color" name="accent_color" value="{{ defaults.accent_color }}">
-          </label>
-        </div>
-        <div>
-          <h4>Redes</h4>
-          <div class="sig-social-labels">
-            {% for social in social_networks %}
-            <label>{{ social.label }}
-              <input type="url" name="{{ social.key }}" value="{{ defaults[social.key] }}" placeholder="{{ social.placeholder }}">
-            </label>
-            {% endfor %}
-          </div>
-        </div>
-      </form>
-
-      <div class="sig-photo-section">
-        <div class="header" style="align-items:flex-start;">
-          <div>
-            <h4>Galeria de fotos del equipo</h4>
-            <p class="muted">Selecciona una foto de referencia para colocarla automaticamente.</p>
-          </div>
-        </div>
-        <div class="sig-photo-gallery">
-          {% for photo in profile_photos %}
-          <div class="sig-photo-card">
-            <img src="{{ photo.url }}" alt="{{ photo.label }}">
-            <strong>{{ photo.label }}</strong>
-            <small class="muted">{{ photo.role }}</small>
-            <button type="button" class="btn btn-small btn-outline" data-apply-photo="{{ photo.url }}">Usar esta foto</button>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-
-      <div class="sig-logo-section">
-        <div class="header" style="align-items:flex-start;">
-          <div>
-            <h4>Biblioteca de logos</h4>
-            <p class="muted">Anade hasta tres logos (principal, secundario y terciario) para partners o acreditaciones.</p>
-          </div>
-        </div>
-        <div class="sig-logo-library">
-          {% for logo in logo_library %}
-          <div class="sig-logo-card">
-            <img src="{{ logo.url }}" alt="{{ logo.label }}">
-            <strong>{{ logo.label }}</strong>
-            <div class="sig-logo-card-actions">
-              {% for slot in logo_slots %}
-              <button type="button" class="btn btn-small" data-apply-logo="{{ logo.url }}" data-logo-slot="{{ slot.key }}">{{ slot.label }}</button>
-              {% endfor %}
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
+    <div class="card preview-card">
       <h3>Vista previa en vivo</h3>
       <div class="signature-preview" data-signature-preview></div>
       <textarea class="sig-html" readonly data-html-output></textarea>
@@ -185,7 +74,143 @@
         <button type="button" class="btn btn-small btn-outline" data-download-html>Descargar HTML</button>
         <span class="sig-toast" data-copy-toast hidden>HTML copiado al portapapeles.</span>
       </div>
-      <p class="muted" style="margin-top:6px;">Pega este bloque en Gmail, Outlook o en las directrices internas del equipo.</p>
+      <p class="muted" style="margin-top:6px;">Pega este bloque en Gmail, Outlook o manuales de estilo.</p>
+    </div>
+
+    <div class="card">
+      <h3>Configura datos</h3>
+      <form id="signature-form">
+        <details class="sig-accordion" open>
+          <summary>Datos principales</summary>
+          <div class="sig-accordion-body">
+            <div class="sig-grid">
+              <label>Nombre completo
+                <input type="text" name="full_name" value="{{ defaults.full_name }}" required>
+              </label>
+              <label>Cargo
+                <input type="text" name="role" value="{{ defaults.role }}">
+              </label>
+              <label>Empresa
+                <input type="text" name="company" value="{{ defaults.company }}">
+              </label>
+            </div>
+            <div class="sig-grid">
+              <label>Telefono
+                <input type="text" name="phone" value="{{ defaults.phone }}">
+              </label>
+              <label>Movil
+                <input type="text" name="mobile" value="{{ defaults.mobile }}">
+              </label>
+              <label>Correo
+                <input type="email" name="email" value="{{ defaults.email }}">
+              </label>
+              <label>Sitio web
+                <input type="text" name="website" value="{{ defaults.website }}">
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="sig-accordion" open>
+          <summary>CTA y mensajes</summary>
+          <div class="sig-accordion-body">
+            <div class="sig-grid">
+              <label>CTA texto
+                <input type="text" name="cta_label" value="{{ defaults.cta_label }}">
+              </label>
+              <label>CTA enlace
+                <input type="url" name="cta_url" value="{{ defaults.cta_url }}">
+              </label>
+            </div>
+            <div class="sig-grid">
+              <label>Banner inferior
+                <textarea name="banner_text">{{ defaults.banner_text }}</textarea>
+              </label>
+              <label>Clausula / disclaimer
+                <textarea name="disclaimer">{{ defaults.disclaimer }}</textarea>
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="sig-accordion">
+          <summary>Imagenes y logos directos</summary>
+          <div class="sig-accordion-body">
+            <div class="sig-grid">
+              <label>Foto de perfil (URL)
+                <input type="url" name="profile_photo_url" value="{{ defaults.profile_photo_url }}">
+              </label>
+              <label>Logo principal (URL)
+                <input type="url" name="logo_url" value="{{ defaults.logo_url }}">
+              </label>
+              <label>Logo secundario (URL)
+                <input type="url" name="logo_secondary_url" value="{{ defaults.logo_secondary_url }}">
+              </label>
+              <label>Logo terciario (URL)
+                <input type="url" name="logo_tertiary_url" value="{{ defaults.logo_tertiary_url }}">
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="sig-accordion">
+          <summary>Colores y redes</summary>
+          <div class="sig-accordion-body">
+            <div class="sig-grid" style="align-items:end;">
+              <label>Color principal
+                <input type="color" name="primary_color" value="{{ defaults.primary_color }}">
+              </label>
+              <label>Color acento
+                <input type="color" name="accent_color" value="{{ defaults.accent_color }}">
+              </label>
+            </div>
+            <div class="sig-social-labels">
+              {% for social in social_networks %}
+              <label>{{ social.label }}
+                <input type="url" name="{{ social.key }}" value="{{ defaults[social.key] }}" placeholder="{{ social.placeholder }}">
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+        </details>
+      </form>
+
+      <details class="sig-accordion">
+        <summary>Galeria de fotos del equipo</summary>
+        <div class="sig-accordion-body">
+          <p class="muted">Haz clic en cualquier foto para aplicarla a la firma.</p>
+          <div class="sig-photo-gallery">
+            {% for photo in profile_photos %}
+            <div class="sig-photo-card">
+              <img src="{{ photo.url }}" alt="{{ photo.label }}">
+              <strong>{{ photo.label }}</strong>
+              <small class="muted">{{ photo.role }}</small>
+              <button type="button" class="btn btn-small btn-outline" data-apply-photo="{{ photo.url }}">Usar esta foto</button>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </details>
+
+      <details class="sig-accordion">
+        <summary>Biblioteca de logos</summary>
+        <div class="sig-accordion-body">
+          <p class="muted">Asigna cada logo al slot que necesites (principal, secundario o terciario).</p>
+          <div class="sig-logo-library">
+            {% for logo in logo_library %}
+            <div class="sig-logo-card">
+              <img src="{{ logo.url }}" alt="{{ logo.label }}">
+              <strong>{{ logo.label }}</strong>
+              <div class="sig-logo-card-actions">
+                {% for slot in logo_slots %}
+                <button type="button" class="btn btn-small" data-apply-logo="{{ logo.url }}" data-logo-slot="{{ slot.key }}">{{ slot.label }}</button>
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -222,7 +247,7 @@
   </div>
 </div>
 <script>
-(function(){
+document.addEventListener('DOMContentLoaded', function(){
   const form = document.getElementById('signature-form');
   if (!form) { return; }
   const preview = document.querySelector('[data-signature-preview]');
@@ -254,7 +279,7 @@
     if (/^https?:/i.test(value)) {
       return value;
     }
-    return 'https://' + value.replace(/^\\/*/, '');
+    return 'https://' + value.replace(/^\/*/, '');
   }
 
   function collectData() {
@@ -278,17 +303,17 @@
     const roleCompany = [data.role, data.company].filter(Boolean).map(safe).join(' | ');
     const contactChunks = [];
     if (data.phone) {
-      contactChunks.push(`Tel: <a href=\"tel:${escapeAttr(data.phone)}\" style=\"color:${escapeAttr(data.accent_color)};text-decoration:none;\">${safe(data.phone)}</a>`);
+      contactChunks.push(`Tel: <a href="tel:${escapeAttr(data.phone)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.phone)}</a>`);
     }
     if (data.mobile) {
-      contactChunks.push(`Movil: <a href=\"tel:${escapeAttr(data.mobile)}\" style=\"color:${escapeAttr(data.accent_color)};text-decoration:none;\">${safe(data.mobile)}</a>`);
+      contactChunks.push(`Movil: <a href="tel:${escapeAttr(data.mobile)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.mobile)}</a>`);
     }
     if (data.email) {
-      contactChunks.push(`<a href=\"mailto:${escapeAttr(data.email)}\" style=\"color:${escapeAttr(data.accent_color)};text-decoration:none;\">${safe(data.email)}</a>`);
+      contactChunks.push(`<a href="mailto:${escapeAttr(data.email)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.email)}</a>`);
     }
     if (data.website) {
       const normalized = normalizeUrl(data.website);
-      contactChunks.push(`<a href=\"${escapeAttr(normalized)}\" style=\"color:${escapeAttr(data.accent_color)};text-decoration:none;\">${safe(data.website)}</a>`);
+      contactChunks.push(`<a href="${escapeAttr(normalized)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.website)}</a>`);
     }
     const contactHtml = contactChunks.join(' | ');
     const socialHtml = socialKeys.map(key => {
@@ -297,29 +322,28 @@
       const normalized = normalizeUrl(url);
       const label = SOCIAL_FIELDS.find(item => item.key === key)?.label || key;
       const letter = escapeHtml(label.charAt(0));
-      return `<a href=\"${escapeAttr(normalized)}\" class=\"social-pill\" style=\"background:${escapeAttr(data.primary_color)};\" target=\"_blank\" rel=\"noopener\">${letter}</a>`;
+      return `<a href="${escapeAttr(normalized)}" class="social-pill" style="background:${escapeAttr(data.primary_color)};" target="_blank" rel="noopener">${letter}</a>`;
     }).filter(Boolean).join('');
-    const ctaHtml = (data.cta_label && data.cta_url) ? `<a href=\"${escapeAttr(normalizeUrl(data.cta_url))}\" class=\"cta-link\" style=\"background:${escapeAttr(data.primary_color)};color:#fff;\" target=\"_blank\" rel=\"noopener\">${safe(data.cta_label)}</a>` : '';
-    const bannerHtml = data.banner_text ? `<div style=\"margin-top:14px;padding:10px 14px;border-radius:10px;background:${escapeAttr(data.primary_color)}10;color:${escapeAttr(data.accent_color)};border:1px solid ${escapeAttr(data.primary_color)}33;\">${safe(data.banner_text)}</div>` : '';
-    const disclaimerHtml = data.disclaimer ? `<div class=\"disclaimer\">${safe(data.disclaimer)}</div>` : '';
-    const profilePhoto = data.profile_photo_url ? `<img src=\"${escapeAttr(data.profile_photo_url)}\" alt=\"Perfil\" style=\"width:120px;height:120px;border-radius:16px;object-fit:cover;display:block;margin:0 auto;\">` : '';
+    const ctaHtml = (data.cta_label && data.cta_url) ? `<a href="${escapeAttr(normalizeUrl(data.cta_url))}" class="cta-link" style="background:${escapeAttr(data.primary_color)};color:#fff;" target="_blank" rel="noopener">${safe(data.cta_label)}</a>` : '';
+    const bannerHtml = data.banner_text ? `<div style="margin-top:14px;padding:10px 14px;border-radius:10px;background:${escapeAttr(data.primary_color)}10;color:${escapeAttr(data.accent_color)};border:1px solid ${escapeAttr(data.primary_color)}33;">${safe(data.banner_text)}</div>` : '';
+    const disclaimerHtml = data.disclaimer ? `<div class="disclaimer">${safe(data.disclaimer)}</div>` : '';
+    const profilePhoto = data.profile_photo_url ? `<img src="${escapeAttr(data.profile_photo_url)}" alt="Perfil" style="width:120px;height:120px;border-radius:16px;object-fit:cover;display:block;margin:0 auto;">` : '';
     const logos = [data.logo_url, data.logo_secondary_url, data.logo_tertiary_url].filter(Boolean);
-    const logosHtml = logos.length ? `<div style=\"margin-top:12px;text-align:center;\">${logos.map(url => `<img src=\"${escapeAttr(url)}\" alt=\"Logo\" style=\"display:inline-block;margin:4px;height:48px;width:140px;max-width:140px;object-fit:contain;border:1px solid #e5e5e5;border-radius:10px;padding:6px;background:#fff;\">`).join('')}</div>` : '';
+    const logosHtml = logos.length ? `<div style="margin-top:12px;text-align:center;">${logos.map(url => `<img src="${escapeAttr(url)}" alt="Logo" style="display:inline-block;margin:4px;height:48px;width:140px;max-width:140px;object-fit:contain;border:1px solid #e5e5e5;border-radius:10px;padding:6px;background:#fff;">`).join('')}</div>` : '';
     const needsRightColumn = Boolean(profilePhoto || logosHtml);
     const borderRight = needsRightColumn ? `border-right:2px solid ${escapeAttr(data.primary_color)};` : '';
-
     const rightColumn = needsRightColumn ? `
-    <td style=\"padding-left:18px;text-align:center;\">${profilePhoto}${logosHtml}</td>` : '';
+    <td style="padding-left:18px;text-align:center;">${profilePhoto}${logosHtml}</td>` : '';
 
     return `
-<table cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;max-width:620px;\">
+<table cellpadding="0" cellspacing="0" style="width:100%;max-width:620px;">
   <tr>
-    <td style=\"padding-right:18px;${borderRight}\">
-      <div style=\"font-size:18px;font-weight:700;color:${escapeAttr(data.primary_color)};\">${name}</div>
-      <div style=\"font-size:13px;color:${escapeAttr(data.accent_color)};\">${roleCompany}</div>
-      <div style=\"margin-top:10px;font-size:12px;color:${escapeAttr(data.accent_color)};\">${contactHtml}</div>
+    <td style="padding-right:18px;${borderRight}">
+      <div style="font-size:18px;font-weight:700;color:${escapeAttr(data.primary_color)};">${name}</div>
+      <div style="font-size:13px;color:${escapeAttr(data.accent_color)};">${roleCompany}</div>
+      <div style="margin-top:10px;font-size:12px;color:${escapeAttr(data.accent_color)};">${contactHtml}</div>
       ${ctaHtml}
-      <div style=\"margin-top:12px;\">${socialHtml}</div>
+      <div style="margin-top:12px;">${socialHtml}</div>
       ${bannerHtml}
       ${disclaimerHtml}
     </td>${rightColumn}
@@ -432,6 +456,6 @@
 
   applyData(DEFAULTS);
   update();
-})();
+});
 </script>
 {% endblock %}
