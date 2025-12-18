@@ -12,7 +12,8 @@
   .preview-card{position:sticky;top:16px;align-self:flex-start}
   .sig-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
   .sig-grid label{display:flex;flex-direction:column;font-size:13px;font-weight:600;color:#333}
-  .sig-grid label input,.sig-grid label textarea{margin-top:6px;padding:10px;border-radius:8px;border:1px solid #ccc;font:inherit}
+  .sig-grid label input,.sig-grid label textarea,.sig-grid label select{margin-top:6px;padding:10px;border-radius:8px;border:1px solid #ccc;font:inherit}
+  .sig-grid label select{background:#fff;appearance:none}
   .sig-grid label textarea{min-height:70px;resize:vertical}
   .sig-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
   .sig-actions button{flex:0 0 auto}
@@ -123,6 +124,17 @@
               </label>
             </div>
             <div class="sig-grid">
+              <label>Tagline / frase corta
+                <input type="text" name="tagline" value="{{ defaults.tagline }}">
+              </label>
+              <label>Badge o etiqueta
+                <input type="text" name="badge_text" value="{{ defaults.badge_text }}">
+              </label>
+              <label>Color del badge
+                <input type="color" name="badge_color" value="{{ defaults.badge_color }}">
+              </label>
+            </div>
+            <div class="sig-grid">
               <label>Banner inferior
                 <textarea name="banner_text">{{ defaults.banner_text }}</textarea>
               </label>
@@ -156,6 +168,15 @@
         <details class="sig-accordion">
           <summary>Colores y redes</summary>
           <div class="sig-accordion-body">
+            <div class="sig-grid">
+              <label>Tema visual
+                <select name="theme">
+                  {% for theme in themes %}
+                  <option value="{{ theme.key }}" {% if defaults.theme == theme.key %}selected{% endif %}>{{ theme.label }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+            </div>
             <div class="sig-grid" style="align-items:end;">
               <label>Color principal
                 <input type="color" name="primary_color" value="{{ defaults.primary_color }}">
@@ -297,23 +318,36 @@ document.addEventListener('DOMContentLoaded', function(){
     return data;
   }
 
+  const themeRenderers = {
+    "classic-split": renderClassicSplit,
+    "left-highlight": renderLeftHighlight,
+    "card-compact": renderCardCompact,
+    "photo-focus": renderPhotoFocus,
+    "bold-banner": renderBoldBanner,
+    "dark-strip": renderDarkStrip,
+    "logo-stack": renderLogoStack,
+  };
+
   function buildSignatureHtml(data) {
     const safe = value => escapeHtml(value);
+    const primaryColor = escapeAttr(data.primary_color || '#0A84FF');
+    const accentColor = escapeAttr(data.accent_color || '#111827');
+    const badgeColor = escapeAttr(data.badge_color || primaryColor);
     const name = safe(data.full_name || '');
     const roleCompany = [data.role, data.company].filter(Boolean).map(safe).join(' | ');
     const contactChunks = [];
     if (data.phone) {
-      contactChunks.push(`Tel: <a href="tel:${escapeAttr(data.phone)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.phone)}</a>`);
+      contactChunks.push(`Tel: <a href="tel:${escapeAttr(data.phone)}" style="color:${accentColor};text-decoration:none;">${safe(data.phone)}</a>`);
     }
     if (data.mobile) {
-      contactChunks.push(`Movil: <a href="tel:${escapeAttr(data.mobile)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.mobile)}</a>`);
+      contactChunks.push(`Movil: <a href="tel:${escapeAttr(data.mobile)}" style="color:${accentColor};text-decoration:none;">${safe(data.mobile)}</a>`);
     }
     if (data.email) {
-      contactChunks.push(`<a href="mailto:${escapeAttr(data.email)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.email)}</a>`);
+      contactChunks.push(`<a href="mailto:${escapeAttr(data.email)}" style="color:${accentColor};text-decoration:none;">${safe(data.email)}</a>`);
     }
     if (data.website) {
       const normalized = normalizeUrl(data.website);
-      contactChunks.push(`<a href="${escapeAttr(normalized)}" style="color:${escapeAttr(data.accent_color)};text-decoration:none;">${safe(data.website)}</a>`);
+      contactChunks.push(`<a href="${escapeAttr(normalized)}" style="color:${accentColor};text-decoration:none;">${safe(data.website)}</a>`);
     }
     const contactHtml = contactChunks.join(' | ');
     const socialHtml = socialKeys.map(key => {
@@ -322,33 +356,208 @@ document.addEventListener('DOMContentLoaded', function(){
       const normalized = normalizeUrl(url);
       const label = SOCIAL_FIELDS.find(item => item.key === key)?.label || key;
       const letter = escapeHtml(label.charAt(0));
-      return `<a href="${escapeAttr(normalized)}" class="social-pill" style="background:${escapeAttr(data.primary_color)};" target="_blank" rel="noopener">${letter}</a>`;
+      return `<a href="${escapeAttr(normalized)}" class="social-pill" style="background:${primaryColor};" target="_blank" rel="noopener">${letter}</a>`;
     }).filter(Boolean).join('');
-    const ctaHtml = (data.cta_label && data.cta_url) ? `<a href="${escapeAttr(normalizeUrl(data.cta_url))}" class="cta-link" style="background:${escapeAttr(data.primary_color)};color:#fff;" target="_blank" rel="noopener">${safe(data.cta_label)}</a>` : '';
-    const bannerHtml = data.banner_text ? `<div style="margin-top:14px;padding:10px 14px;border-radius:10px;background:${escapeAttr(data.primary_color)}10;color:${escapeAttr(data.accent_color)};border:1px solid ${escapeAttr(data.primary_color)}33;">${safe(data.banner_text)}</div>` : '';
-    const disclaimerHtml = data.disclaimer ? `<div class="disclaimer">${safe(data.disclaimer)}</div>` : '';
-    const profilePhoto = data.profile_photo_url ? `<img src="${escapeAttr(data.profile_photo_url)}" alt="Perfil" style="width:120px;height:120px;border-radius:16px;object-fit:cover;display:block;margin:0 auto;">` : '';
-    const logos = [data.logo_url, data.logo_secondary_url, data.logo_tertiary_url].filter(Boolean);
-    const logosHtml = logos.length ? `<div style="margin-top:12px;text-align:center;">${logos.map(url => `<img src="${escapeAttr(url)}" alt="Logo" style="display:inline-block;margin:4px;height:48px;width:140px;max-width:140px;object-fit:contain;border:1px solid #e5e5e5;border-radius:10px;padding:6px;background:#fff;">`).join('')}</div>` : '';
-    const needsRightColumn = Boolean(profilePhoto || logosHtml);
-    const borderRight = needsRightColumn ? `border-right:2px solid ${escapeAttr(data.primary_color)};` : '';
-    const rightColumn = needsRightColumn ? `
-    <td style="padding-left:18px;text-align:center;">${profilePhoto}${logosHtml}</td>` : '';
+    const ctaHtml = (data.cta_label && data.cta_url)
+      ? `<a href="${escapeAttr(normalizeUrl(data.cta_url))}" class="cta-link" style="background:${primaryColor};color:#fff;" target="_blank" rel="noopener">${safe(data.cta_label)}</a>`
+      : '';
+    const ctaAlt = (data.cta_label && data.cta_url)
+      ? `<a href="${escapeAttr(normalizeUrl(data.cta_url))}" class="cta-link" style="background:#fff;color:${primaryColor};border:2px solid ${primaryColor};" target="_blank" rel="noopener">${safe(data.cta_label)}</a>`
+      : '';
+    const bannerHtml = data.banner_text
+      ? `<div style="margin-top:14px;padding:10px 14px;border-radius:10px;background:${primaryColor}10;color:${accentColor};border:1px solid ${primaryColor}33;">${safe(data.banner_text)}</div>`
+      : '';
+    const taglineHtml = data.tagline
+      ? `<div style="font-size:13px;color:${accentColor};margin-top:4px;">${safe(data.tagline)}</div>`
+      : '';
+    const taglineLight = data.tagline
+      ? `<div style="font-size:13px;color:rgba(255,255,255,0.85);margin-top:4px;">${safe(data.tagline)}</div>`
+      : '';
+    const badgeHtml = data.badge_text
+      ? `<span style="display:inline-flex;align-items:center;margin-left:8px;padding:3px 10px;border-radius:999px;background:${badgeColor};color:#fff;font-size:11px;font-weight:600;">${safe(data.badge_text)}</span>`
+      : '';
+    const disclaimerHtml = data.disclaimer
+      ? `<div class="disclaimer" style="color:${accentColor};">${safe(data.disclaimer)}</div>`
+      : '';
+    const disclaimerLight = data.disclaimer
+      ? `<div style="margin-top:16px;font-size:11px;color:rgba(255,255,255,0.75);">${safe(data.disclaimer)}</div>`
+      : '';
+    const makePhoto = styles => data.profile_photo_url
+      ? `<img src="${escapeAttr(data.profile_photo_url)}" alt="Perfil" style="${styles}">`
+      : '';
+    const photoSquare = makePhoto('width:120px;height:120px;border-radius:16px;object-fit:cover;display:block;margin:0 auto;');
+    const photoCircle = makePhoto('width:88px;height:88px;border-radius:999px;object-fit:cover;display:block;');
+    const photoWide = makePhoto('width:160px;height:160px;border-radius:22px;object-fit:cover;display:block;margin:0 auto 12px auto;');
+    const logos = [data.logo_url, data.logo_secondary_url, data.logo_tertiary_url].filter(Boolean).map(url => `<img src="${escapeAttr(url)}" alt="Logo" style="display:inline-block;margin:4px;height:48px;width:140px;max-width:140px;object-fit:contain;border:1px solid #e5e5e5;border-radius:10px;padding:6px;background:#fff;">`);
+    const logosInline = logos.join('');
+    const logosBlock = logos.length ? `<div style="margin-top:12px;text-align:center;">${logosInline}</div>` : '';
+    const logosGrid = logos.length ? `<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px;">${logosInline}</div>` : '';
 
+    const parts = {
+      name,
+      roleCompany,
+      contactHtml,
+      socialHtml,
+      ctaHtml,
+      ctaAlt,
+      bannerHtml,
+      disclaimerHtml,
+      disclaimerLight,
+      taglineHtml,
+      taglineLight,
+      badgeHtml,
+      logosBlock,
+      logosGrid,
+      logosInline,
+      primaryColor,
+      accentColor,
+      photoSquare,
+      photoCircle,
+      photoWide,
+    };
+
+    const renderer = themeRenderers[data.theme] || themeRenderers['classic-split'];
+    return renderer(parts);
+  }
+
+  function renderClassicSplit(p) {
+    const hasRight = Boolean(p.photoSquare || p.logosBlock);
+    const borderRight = hasRight ? `border-right:2px solid ${p.primaryColor};` : '';
+    const rightColumn = hasRight ? `<td style="padding-left:18px;text-align:center;">${p.photoSquare || ''}${p.logosBlock || ''}</td>` : '';
     return `
 <table cellpadding="0" cellspacing="0" style="width:100%;max-width:620px;">
   <tr>
     <td style="padding-right:18px;${borderRight}">
-      <div style="font-size:18px;font-weight:700;color:${escapeAttr(data.primary_color)};">${name}</div>
-      <div style="font-size:13px;color:${escapeAttr(data.accent_color)};">${roleCompany}</div>
-      <div style="margin-top:10px;font-size:12px;color:${escapeAttr(data.accent_color)};">${contactHtml}</div>
-      ${ctaHtml}
-      <div style="margin-top:12px;">${socialHtml}</div>
-      ${bannerHtml}
-      ${disclaimerHtml}
+      <div style="font-size:18px;font-weight:700;color:${p.primaryColor};">${p.name}${p.badgeHtml}</div>
+      ${p.taglineHtml}
+      <div style="font-size:13px;color:${p.accentColor};">${p.roleCompany}</div>
+      <div style="margin-top:10px;font-size:12px;color:${p.accentColor};">${p.contactHtml}</div>
+      ${p.ctaHtml}
+      ${p.socialHtml ? `<div style="margin-top:12px;">${p.socialHtml}</div>` : ''}
+      ${p.bannerHtml}
+      ${p.disclaimerHtml}
     </td>${rightColumn}
   </tr>
 </table>`.trim();
+  }
+
+  function renderLeftHighlight(p) {
+    return `
+<table cellpadding="0" cellspacing="0" style="width:100%;max-width:620px;border:1px solid #e5e5e5;border-radius:16px;overflow:hidden;">
+  <tr>
+    <td style="width:10px;background:${p.primaryColor};"></td>
+    <td style="padding:18px 22px;">
+      <div style="display:flex;gap:16px;align-items:center;">
+        ${p.photoCircle ? `<div>${p.photoCircle}</div>` : ''}
+        <div>
+          <div style="font-size:20px;font-weight:700;color:${p.primaryColor};">${p.name}${p.badgeHtml}</div>
+          ${p.taglineHtml}
+          <div style="font-size:13px;color:${p.accentColor};margin-top:4px;">${p.roleCompany}</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;font-size:12px;color:${p.accentColor};">${p.contactHtml}</div>
+      ${p.ctaHtml}
+      ${p.bannerHtml}
+      ${p.socialHtml ? `<div style="margin-top:10px;">${p.socialHtml}</div>` : ''}
+      ${p.logosBlock || ''}
+      ${p.disclaimerHtml}
+    </td>
+  </tr>
+</table>`.trim();
+  }
+
+  function renderCardCompact(p) {
+    return `
+<div style="border:1px solid #e5e5e5;border-radius:16px;padding:18px;background:#fbfbfb;">
+  <div style="display:flex;gap:14px;align-items:center;">
+    ${p.photoCircle || ''}
+    <div>
+      <div style="font-size:18px;font-weight:700;color:${p.primaryColor};">${p.name}${p.badgeHtml}</div>
+      ${p.taglineHtml}
+      <div style="font-size:13px;color:${p.accentColor};margin-top:4px;">${p.roleCompany}</div>
+    </div>
+  </div>
+  <div style="margin-top:12px;font-size:12px;color:${p.accentColor};">${p.contactHtml}</div>
+  ${p.ctaHtml}
+  ${p.bannerHtml}
+  ${p.socialHtml ? `<div style="margin-top:10px;">${p.socialHtml}</div>` : ''}
+  ${p.logosGrid || ''}
+  ${p.disclaimerHtml}
+</div>`.trim();
+  }
+
+  function renderPhotoFocus(p) {
+    return `
+<div style="border:1px solid #e5e5e5;border-radius:18px;padding:22px;text-align:center;background:#fff;">
+  ${p.photoWide || p.photoSquare || ''}
+  <div style="font-size:20px;font-weight:700;color:${p.primaryColor};">${p.name}${p.badgeHtml}</div>
+  ${p.taglineHtml}
+  <div style="font-size:13px;color:${p.accentColor};margin-top:4px;">${p.roleCompany}</div>
+  <div style="margin-top:12px;font-size:12px;color:${p.accentColor};">${p.contactHtml}</div>
+  ${p.ctaHtml}
+  ${p.bannerHtml}
+  ${p.socialHtml ? `<div style="margin-top:10px;">${p.socialHtml}</div>` : ''}
+  ${p.logosGrid || ''}
+  ${p.disclaimerHtml}
+</div>`.trim();
+  }
+
+  function renderBoldBanner(p) {
+    return `
+<div style="border:1px solid #e5e5e5;border-radius:18px;overflow:hidden;">
+  <div style="background:${p.primaryColor};color:#fff;padding:18px;">
+    <div style="font-size:22px;font-weight:700;">${p.name}${p.badgeHtml}</div>
+    ${p.taglineLight || ''}
+    <div style="font-size:14px;margin-top:6px;">${p.roleCompany}</div>
+    ${p.ctaAlt}
+  </div>
+  <div style="padding:18px;">
+    <div style="font-size:12px;color:${p.accentColor};">${p.contactHtml}</div>
+    ${p.bannerHtml}
+    ${p.socialHtml ? `<div style="margin-top:10px;">${p.socialHtml}</div>` : ''}
+    ${p.logosGrid || ''}
+    ${p.disclaimerHtml}
+  </div>
+</div>`.trim();
+  }
+
+  function renderDarkStrip(p) {
+    return `
+<div style="border-radius:18px;overflow:hidden;background:#111827;color:#f8fafc;">
+  <div style="padding:22px;border-bottom:3px solid ${p.primaryColor};">
+    <div style="font-size:20px;font-weight:700;color:#fff;">${p.name}${p.badgeHtml}</div>
+    ${p.taglineLight || ''}
+    <div style="font-size:13px;color:#cbd5f5;margin-top:4px;">${p.roleCompany}</div>
+    <div style="margin-top:12px;font-size:12px;color:#e2e8f0;">${p.contactHtml}</div>
+    ${p.ctaAlt}
+  </div>
+  <div style="padding:18px;">
+    ${p.socialHtml ? `<div style="margin-bottom:10px;">${p.socialHtml}</div>` : ''}
+    ${p.bannerHtml}
+    ${p.logosGrid || ''}
+    ${p.disclaimerLight || ''}
+  </div>
+</div>`.trim();
+  }
+
+  function renderLogoStack(p) {
+    return `
+<div style="border:1px solid #e5e5e5;border-radius:18px;padding:20px;">
+  <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;">
+    ${p.photoCircle ? `<div>${p.photoCircle}</div>` : ''}
+    <div>
+      <div style="font-size:19px;font-weight:700;color:${p.primaryColor};">${p.name}${p.badgeHtml}</div>
+      ${p.taglineHtml}
+      <div style="font-size:13px;color:${p.accentColor};margin-top:4px;">${p.roleCompany}</div>
+    </div>
+  </div>
+  <div style="margin-top:10px;font-size:12px;color:${p.accentColor};">${p.contactHtml}</div>
+  ${p.ctaHtml}
+  ${p.bannerHtml}
+  ${p.socialHtml ? `<div style="margin-top:10px;">${p.socialHtml}</div>` : ''}
+  ${p.logosGrid || ''}
+  ${p.disclaimerHtml}
+</div>`.trim();
   }
 
   function update() {
