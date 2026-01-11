@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  <a href="{{ url_for('admin_calendars.list_calendars') }}" class="btn btn-link mb-3">&larr; Volver a calendarios</a>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h2 class="card-title mb-3">{{ title }}</h2>
+      <form method="post" action="{{ request.path }}">
+        {{ form.hidden_tag() }}
+        <div class="row g-3">
+          <div class="col-md-6">
+            {{ form.name.label(class="form-label") }}
+            {{ form.name(class="form-control", placeholder="Calendario Barcelona") }}
+            {% if form.name.errors %}
+            <div class="text-danger small mt-1">{{ form.name.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            {{ form.year.label(class="form-label") }}
+            {{ form.year(class="form-control") }}
+            {% if form.year.errors %}
+            <div class="text-danger small mt-1">{{ form.year.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Jornadas</label>
+            <div class="text-muted small">Define horas para L-V, sábado y domingo.</div>
+          </div>
+          <div class="col-md-4">
+            {{ form.weekday_hours.label(class="form-label") }}
+            {{ form.weekday_hours(class="form-control", step="0.25") }}
+            {% if form.weekday_hours.errors %}
+            <div class="text-danger small mt-1">{{ form.weekday_hours.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4">
+            {{ form.saturday_hours.label(class="form-label") }}
+            {{ form.saturday_hours(class="form-control", step="0.25") }}
+            {% if form.saturday_hours.errors %}
+            <div class="text-danger small mt-1">{{ form.saturday_hours.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4">
+            {{ form.sunday_hours.label(class="form-label") }}
+            {{ form.sunday_hours(class="form-control", step="0.25") }}
+            {% if form.sunday_hours.errors %}
+            <div class="text-danger small mt-1">{{ form.sunday_hours.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-12">
+            {{ form.description.label(class="form-label") }}
+            {{ form.description(class="form-control", rows=3, placeholder="Descripción o centro de trabajo") }}
+            {% if form.description.errors %}
+            <div class="text-danger small mt-1">{{ form.description.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-12">
+            {{ form.notes.label(class="form-label") }}
+            {{ form.notes(class="form-control", rows=3, placeholder="Notas internas del calendario") }}
+            {% if form.notes.errors %}
+            <div class="text-danger small mt-1">{{ form.notes.errors[0] }}</div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-primary">Guardar</button>
+          <a href="{{ url_for('admin_calendars.list_calendars') }}" class="btn btn-secondary">Cancelar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if calendar %}
+  <div class="card mb-4">
+    <div class="card-body">
+      <h3 class="card-title mb-3">Resumen del calendario</h3>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="muted">Horas esperadas anuales</div>
+          <strong>{{ summary.expected_hours }} h</strong>
+        </div>
+        <div class="col-md-4">
+          <div class="muted">Festivos por tipo</div>
+          <div>Locales: <strong>{{ summary.holiday_counts.local }}</strong></div>
+          <div>Autonómicos: <strong>{{ summary.holiday_counts.autonomic }}</strong></div>
+          <div>Nacionales: <strong>{{ summary.holiday_counts.national }}</strong></div>
+        </div>
+        <div class="col-md-4">
+          <div class="muted">Días contabilizados</div>
+          <div>L-V: <strong>{{ summary.weekday_count }}</strong></div>
+          <div>Sábados: <strong>{{ summary.saturday_count }}</strong></div>
+          <div>Domingos: <strong>{{ summary.sunday_count }}</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title mb-3">Festivos del calendario</h3>
+      <form method="post" action="{{ url_for('admin_calendars.add_holiday', calendar_id=calendar.id) }}">
+        {{ holiday_form.hidden_tag() }}
+        <div class="row g-3">
+          <div class="col-md-3">
+            {{ holiday_form.date.label(class="form-label") }}
+            {{ holiday_form.date(class="form-control") }}
+            {% if holiday_form.date.errors %}
+            <div class="text-danger small mt-1">{{ holiday_form.date.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            {{ holiday_form.holiday_type.label(class="form-label") }}
+            {{ holiday_form.holiday_type(class="form-select") }}
+            {% if holiday_form.holiday_type.errors %}
+            <div class="text-danger small mt-1">{{ holiday_form.holiday_type.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            {{ holiday_form.name.label(class="form-label") }}
+            {{ holiday_form.name(class="form-control", placeholder="Nombre del festivo") }}
+            {% if holiday_form.name.errors %}
+            <div class="text-danger small mt-1">{{ holiday_form.name.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            {{ holiday_form.note.label(class="form-label") }}
+            {{ holiday_form.note(class="form-control", placeholder="Notas") }}
+            {% if holiday_form.note.errors %}
+            <div class="text-danger small mt-1">{{ holiday_form.note.errors[0] }}</div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" class="btn btn-primary">Añadir festivo</button>
+        </div>
+      </form>
+
+      {% if holidays %}
+      <div class="table-responsive mt-4">
+        <table class="table table-striped table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th scope="col">Fecha</th>
+              <th scope="col">Tipo</th>
+              <th scope="col">Nombre</th>
+              <th scope="col">Notas</th>
+              <th scope="col" class="text-end">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for holiday in holidays %}
+            <tr>
+              <td>{{ holiday.date.strftime('%d/%m/%Y') }}</td>
+              <td>{{ holiday.holiday_type }}</td>
+              <td>{{ holiday.name or '-' }}</td>
+              <td>{{ holiday.note or '-' }}</td>
+              <td class="text-end">
+                <form method="post" action="{{ url_for('admin_calendars.delete_holiday', calendar_id=calendar.id, holiday_id=holiday.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar festivo?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="alert alert-info mt-3">No hay festivos añadidos todavía.</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -24,10 +24,12 @@
     <a class="btn btn-hero btn-green" href="{{ url_for('admin_schedules.list_schedules') }}" style="text-decoration:none;">
       <i data-lucide="clock" class="icon"></i> Gestion de Jornadas
     </a>
+    <a class="btn btn-hero btn-green" href="{{ url_for('admin_calendars.list_calendars') }}" style="text-decoration:none;">
+      <i data-lucide="calendar" class="icon"></i> Gestion de Calendarios
+    </a>
     <a class="btn btn-hero" href="{{ url_for('admin_areas.list_areas') }}" style="text-decoration:none;background:#1976d2;color:#fff;">
       <i data-lucide="map-pin" class="icon"></i> Gestion de Areas
     </a>
   </div>
 </div>
 {% endblock %}
-

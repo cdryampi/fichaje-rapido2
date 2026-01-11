@@ -214,6 +214,7 @@ for module in (
     "admin_panel.areas.models",
     "admin_panel.employees.models",
     "admin_panel.schedules.models",
+    "admin_panel.calendars.models",
 ):
     try:
         __import__(module)
