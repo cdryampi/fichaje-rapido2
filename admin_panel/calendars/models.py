@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Time,
     Text,
     UniqueConstraint,
 )
@@ -29,9 +30,14 @@ class WorkCalendar(Base):
     year = Column(Integer, nullable=False)
     description = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
+    weekly_hours = Column(Float, nullable=False, default=40.0)
     weekday_hours = Column(Float, nullable=False, default=8.0)
     saturday_hours = Column(Float, nullable=False, default=0.0)
     sunday_hours = Column(Float, nullable=False, default=0.0)
+    break_minutes = Column(Integer, nullable=False, default=0)
+    clock_in_start_time = Column(Time, nullable=True)
+    clock_in_end_time = Column(Time, nullable=True)
+    max_daily_hours = Column(Float, nullable=False, default=8.0)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(
         DateTime(timezone=True),

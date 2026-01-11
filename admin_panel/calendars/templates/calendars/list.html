@@ -15,7 +15,7 @@
           <th scope="col">Nombre</th>
           <th scope="col">Año</th>
           <th scope="col">Horas esperadas</th>
-          <th scope="col">Jornadas</th>
+          <th scope="col">Parametros</th>
           <th scope="col">Festivos</th>
           <th scope="col" class="text-end">Acciones</th>
         </tr>
@@ -37,9 +37,14 @@
             {% endif %}
           </td>
           <td>
+            Semana: {{ calendar.weekly_hours }} h<br>
             L-V: {{ calendar.weekday_hours }} h<br>
             S: {{ calendar.saturday_hours }} h<br>
-            D: {{ calendar.sunday_hours }} h
+            D: {{ calendar.sunday_hours }} h<br>
+            Descanso: {{ calendar.break_minutes }} min<br>
+            Fichaje: {{ calendar.clock_in_start_time.strftime('%H:%M') if calendar.clock_in_start_time else '-' }}
+            - {{ calendar.clock_in_end_time.strftime('%H:%M') if calendar.clock_in_end_time else '-' }}<br>
+            Max dia: {{ calendar.max_daily_hours }} h
           </td>
           <td>
             {% if summary %}

@@ -19,7 +19,7 @@
           </div>
           <div class="col-md-3">
             {{ form.year.label(class="form-label") }}
-            {{ form.year(class="form-control") }}
+            {{ form.year(class="form-select") }}
             {% if form.year.errors %}
             <div class="text-danger small mt-1">{{ form.year.errors[0] }}</div>
             {% endif %}
@@ -27,6 +27,13 @@
           <div class="col-md-3">
             <label class="form-label">Jornadas</label>
             <div class="text-muted small">Define horas para L-V, sábado y domingo.</div>
+          </div>
+          <div class="col-md-4">
+            {{ form.weekly_hours.label(class="form-label") }}
+            {{ form.weekly_hours(class="form-control", step="0.25") }}
+            {% if form.weekly_hours.errors %}
+            <div class="text-danger small mt-1">{{ form.weekly_hours.errors[0] }}</div>
+            {% endif %}
           </div>
           <div class="col-md-4">
             {{ form.weekday_hours.label(class="form-label") }}
@@ -47,6 +54,34 @@
             {{ form.sunday_hours(class="form-control", step="0.25") }}
             {% if form.sunday_hours.errors %}
             <div class="text-danger small mt-1">{{ form.sunday_hours.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4">
+            {{ form.break_minutes.label(class="form-label") }}
+            {{ form.break_minutes(class="form-control", step="1") }}
+            {% if form.break_minutes.errors %}
+            <div class="text-danger small mt-1">{{ form.break_minutes.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4">
+            {{ form.clock_in_start_time.label(class="form-label") }}
+            {{ form.clock_in_start_time(class="form-control", type="time") }}
+            {% if form.clock_in_start_time.errors %}
+            <div class="text-danger small mt-1">{{ form.clock_in_start_time.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4">
+            {{ form.clock_in_end_time.label(class="form-label") }}
+            {{ form.clock_in_end_time(class="form-control", type="time") }}
+            {% if form.clock_in_end_time.errors %}
+            <div class="text-danger small mt-1">{{ form.clock_in_end_time.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4">
+            {{ form.max_daily_hours.label(class="form-label") }}
+            {{ form.max_daily_hours(class="form-control", step="0.25") }}
+            {% if form.max_daily_hours.errors %}
+            <div class="text-danger small mt-1">{{ form.max_daily_hours.errors[0] }}</div>
             {% endif %}
           </div>
           <div class="col-12">

@@ -127,14 +127,23 @@ def create_calendar():
                     year=form.year.data,
                     description=(form.description.data or "").strip() or None,
                     notes=(form.notes.data or "").strip() or None,
+                    weekly_hours=form.weekly_hours.data,
                     weekday_hours=form.weekday_hours.data,
                     saturday_hours=form.saturday_hours.data,
                     sunday_hours=form.sunday_hours.data,
+                    break_minutes=form.break_minutes.data or 0,
+                    clock_in_start_time=form.clock_in_start_time.data,
+                    clock_in_end_time=form.clock_in_end_time.data,
+                    max_daily_hours=form.max_daily_hours.data or 0,
                 )
                 db.add(calendar)
-                db.commit()
-                flash("Calendario creado correctamente.", "ok")
-                return redirect(url_for("admin_calendars.edit_calendar", calendar_id=calendar.id))
+                try:
+                    db.commit()
+                    flash("Calendario creado correctamente.", "ok")
+                    return redirect(url_for("admin_calendars.edit_calendar", calendar_id=calendar.id))
+                except IntegrityError:
+                    db.rollback()
+                    form.name.errors.append("No se pudo crear el calendario. Reintenta.")
         finally:
             db.close()
     return render_template("calendars/edit.html", form=form, title="Crear calendario laboral")
@@ -166,9 +175,14 @@ def edit_calendar(calendar_id: int):
                 calendar.year = form.year.data
                 calendar.description = (form.description.data or "").strip() or None
                 calendar.notes = (form.notes.data or "").strip() or None
+                calendar.weekly_hours = form.weekly_hours.data
                 calendar.weekday_hours = form.weekday_hours.data
                 calendar.saturday_hours = form.saturday_hours.data
                 calendar.sunday_hours = form.sunday_hours.data
+                calendar.break_minutes = form.break_minutes.data or 0
+                calendar.clock_in_start_time = form.clock_in_start_time.data
+                calendar.clock_in_end_time = form.clock_in_end_time.data
+                calendar.max_daily_hours = form.max_daily_hours.data or 0
                 try:
                     db.commit()
                     flash("Calendario actualizado correctamente.", "ok")

@@ -263,6 +263,23 @@ def init_db_with_demo():
             if 'manager_id' not in area_cols:
                 con.exec_driver_sql("ALTER TABLE areas ADD COLUMN manager_id INTEGER")
                 migrated.append('areas.manager_id')
+            # Ensure work calendar columns exist
+            calendar_cols = [r[1] for r in con.exec_driver_sql("PRAGMA table_info('work_calendars')").fetchall()]
+            if 'weekly_hours' not in calendar_cols:
+                con.exec_driver_sql("ALTER TABLE work_calendars ADD COLUMN weekly_hours FLOAT DEFAULT 40.0 NOT NULL")
+                migrated.append('work_calendars.weekly_hours')
+            if 'break_minutes' not in calendar_cols:
+                con.exec_driver_sql("ALTER TABLE work_calendars ADD COLUMN break_minutes INTEGER DEFAULT 0 NOT NULL")
+                migrated.append('work_calendars.break_minutes')
+            if 'clock_in_start_time' not in calendar_cols:
+                con.exec_driver_sql("ALTER TABLE work_calendars ADD COLUMN clock_in_start_time TIME")
+                migrated.append('work_calendars.clock_in_start_time')
+            if 'clock_in_end_time' not in calendar_cols:
+                con.exec_driver_sql("ALTER TABLE work_calendars ADD COLUMN clock_in_end_time TIME")
+                migrated.append('work_calendars.clock_in_end_time')
+            if 'max_daily_hours' not in calendar_cols:
+                con.exec_driver_sql("ALTER TABLE work_calendars ADD COLUMN max_daily_hours FLOAT DEFAULT 8.0 NOT NULL")
+                migrated.append('work_calendars.max_daily_hours')
             if migrated:
                 print(f"✓ Columnas migradas: {', '.join(migrated)}")
     except Exception as e:
