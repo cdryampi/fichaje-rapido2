@@ -9,11 +9,13 @@ def register_admin_panel(app: Flask) -> None:
     from .employees import bp as employees_bp
     from .areas import bp as areas_bp
     from .schedules import bp as schedules_bp
+    from .calendars import bp as calendars_bp
 
     app.register_blueprint(roles_bp)
     app.register_blueprint(employees_bp)
     app.register_blueprint(areas_bp)
     app.register_blueprint(schedules_bp)
+    app.register_blueprint(calendars_bp)
 
 
 __all__ = ["register_admin_panel"]
