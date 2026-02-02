@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="es">
+
 <head>
   <meta charset="utf-8">
   <title>{{ title or owner_name }}</title>
@@ -8,14 +9,14 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <script>
-    (function(){
+    (function () {
       try {
         var saved = localStorage.getItem('theme');
         var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (saved === 'dark' || (!saved && prefersDark)) {
           document.documentElement.classList.add('dark');
         }
-      } catch (e) {}
+      } catch (e) { }
     })();
   </script>
   <script>
@@ -27,117 +28,531 @@
     });
   </script>
   <style>
-    body{font-family:system-ui,Arial;margin:24px}
-    .card{border:1px solid #ddd;border-radius:10px;padding:16px;max-width:520px}
-    .btn{display:inline-flex;align-items:center;gap:10px;padding:14px 20px;border-radius:14px;border:none;background:#f0f0f0;color:#111;cursor:pointer;font-weight:600;transition:transform .02s ease, box-shadow .2s ease, background-color .15s ease, filter .15s ease;box-shadow:0 2px 0 rgba(0,0,0,.15)}
-    .btn:focus{outline:3px solid rgba(33,150,243,.45);outline-offset:2px}
-    .btn:hover{transform:translateY(-1px);box-shadow:0 6px 14px rgba(0,0,0,.12)}
-    .btn:active{transform:translateY(0);filter:brightness(.95)}
-    .btn .icon{display:inline-block;margin-right:8px;width:20px;height:20px}
-    .btn-hero{border-radius:10px;font-size:16px}
-    .btn-green{background:#14a44d;color:#fff}
-    .btn-green:hover{background:#0f8c40}
-    .btn-red{background:#e31b23;color:#fff}
-    .btn-red:hover{background:#c6171e}
-    .btn-yellow{background:#f2b400;color:#fff}
-    .btn-yellow:hover{background:#d49c00}
-    .btn-small{padding:8px 12px;border-radius:8px;font-size:14px}
-    .btn-dim{opacity:.45}
-    .btn[disabled]{opacity:.5;cursor:not-allowed;transform:none;filter:none}
-    .actions-right{display:flex;gap:8px;align-items:center}
-    .row{margin-top:12px}.muted{color:#666}
-    .header{display:flex;align-items:center;justify-content:space-between}
-    .center{display:flex;justify-content:center}
-    .section-title{font-weight:700;margin:8px 0}
+    body {
+      font-family: system-ui, Arial;
+      margin: 24px
+    }
+
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 16px;
+      max-width: 520px
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 20px;
+      border-radius: 14px;
+      border: none;
+      background: #f0f0f0;
+      color: #111;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform .02s ease, box-shadow .2s ease, background-color .15s ease, filter .15s ease;
+      box-shadow: 0 2px 0 rgba(0, 0, 0, .15)
+    }
+
+    .btn:focus {
+      outline: 3px solid rgba(33, 150, 243, .45);
+      outline-offset: 2px
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 14px rgba(0, 0, 0, .12)
+    }
+
+    .btn:active {
+      transform: translateY(0);
+      filter: brightness(.95)
+    }
+
+    .btn .icon {
+      display: inline-block;
+      margin-right: 8px;
+      width: 20px;
+      height: 20px
+    }
+
+    .btn-hero {
+      border-radius: 10px;
+      font-size: 16px
+    }
+
+    .btn-green {
+      background: #14a44d;
+      color: #fff
+    }
+
+    .btn-green:hover {
+      background: #0f8c40
+    }
+
+    .btn-red {
+      background: #e31b23;
+      color: #fff
+    }
+
+    .btn-red:hover {
+      background: #c6171e
+    }
+
+    .btn-yellow {
+      background: #f2b400;
+      color: #fff
+    }
+
+    .btn-yellow:hover {
+      background: #d49c00
+    }
+
+    .btn-small {
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px
+    }
+
+    .btn-dim {
+      opacity: .45
+    }
+
+    .btn[disabled] {
+      opacity: .5;
+      cursor: not-allowed;
+      transform: none;
+      filter: none
+    }
+
+    .actions-right {
+      display: flex;
+      gap: 8px;
+      align-items: center
+    }
+
+    .row {
+      margin-top: 12px
+    }
+
+    .muted {
+      color: #666
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between
+    }
+
+    .center {
+      display: flex;
+      justify-content: center
+    }
+
+    .section-title {
+      font-weight: 700;
+      margin: 8px 0
+    }
+
     /* Layout responsive (mobile-first) */
-    .layout{display:flex;gap:16px;flex-direction:column}
-    .nav{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #ddd;border-radius:12px;padding:8px 10px;position:sticky;top:12px;z-index:5;overflow-x:auto;flex-wrap:nowrap}
-    .nav a,.nav button{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;color:#111;text-decoration:none;font:inherit;background:none;border:none;cursor:pointer;white-space:nowrap;flex:0 0 auto}
-    .nav a:hover,.nav button:hover{background:#f5f5f5}
-    .nav button{width:auto;text-align:left}
-    .mobile-nav-toggle{display:flex;align-items:center;gap:8px;margin:0 0 8px 0}
-    @media (max-width: 899px){
-      .nav.is-hidden{display:none}
+    .layout {
+      display: flex;
+      gap: 16px;
+      flex-direction: column
     }
-    .nav .icon{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-    .main{flex:1}
-    .footer{margin-top:32px;padding:16px 0;color:#666;text-align:center;font-size:14px}
-    @media (min-width: 900px){
-      .layout{align-items:flex-start;flex-direction:row}
-      .nav{flex-direction:column;width:220px;height:calc(100vh - 48px);top:24px;overflow-x:visible}
-      .nav.is-hidden{display:flex}
-      .nav button{width:100%}
-      .main{flex:1}
-      .mobile-nav-toggle{display:none}
+
+    .nav {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 8px 10px;
+      position: sticky;
+      top: 12px;
+      z-index: 5;
+      overflow-x: auto;
+      flex-wrap: nowrap
     }
-    .header h2{color:#111}
-    .ok{background:#e8f7ee;border:1px solid #2e7d32;padding:12px;border-radius:8px}
-    .warn{background:#fff3cd;border:1px solid #ffca2c;padding:12px;border-radius:8px}
-    .hist{list-style:none;padding:0;margin:8px 0 0}
-    .hist li{padding:8px 10px;border:1px solid #eee;border-radius:8px;margin-top:6px;display:flex;gap:8px;align-items:center}
-    .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700}
-    .pill-in{background:#e8f5e9;color:#1b5e20}
-    .pill-out{background:#ffebee;color:#b71c1c}
-    form{display:flex;flex-direction:column;gap:10px;max-width:360px}
-    input{padding:10px;border:1px solid #ccc;border-radius:8px}
-    .btn-outline{background:#fff;color:#8a6d3b;border:1px solid #ffca2c}
-    .btn-outline:hover{background:#fff7d6}
-    dialog.modal{border:none;border-radius:12px;padding:0;max-width:740px;width:90%}
-    dialog::backdrop{background:rgba(0,0,0,.35)}
-    .modal-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee;font-weight:700}
-    .modal-body{padding:16px}
-    .modal-actions{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #eee}
-    .inline{display:flex;gap:8px;align-items:center}
-    .input-sm{padding:8px 10px;font-size:14px}
-    .w-80{width:80px}
-    .w-120{width:120px}
-    .is-invalid{border-color:#e31b23 !important}
-    .dark .is-invalid{border-color:#ff6b6b !important}
-    .dark body{background:#121212;color:#eaeaea}
-    .dark .card{background:#1e1e1e;border-color:#333}
-    .dark .muted{color:#aaa}
-    .dark input{background:#111;color:#eee;border-color:#444}
-    .dark select{background:#111;color:#eee;border-color:#444}
-    .dark textarea{background:#111;color:#eee;border-color:#444}
-    .dark .btn{background:#2a2a2a;color:#fff}
-    .dark .btn:hover{box-shadow:0 6px 14px rgba(0,0,0,.4)}
-    .dark .btn-outline{background:transparent;color:#ffca2c;border:1px solid #ffca2c}
-    .dark .btn-outline:hover{background:rgba(255,202,44,.12)}
-    .dark .btn-green{background:#14a44d;color:#fff}
-    .dark .btn-green:hover{background:#0f8c40}
-    .dark .btn-red{background:#e31b23;color:#fff}
-    .dark .btn-red:hover{background:#c6171e}
-    .dark .btn-yellow{background:#f2b400;color:#fff}
-    .dark .btn-yellow:hover{background:#d49c00}
-    .dark h1,.dark h2,.dark h3{color:#ffffff}
-    .dark .header h2{color:#ffffff}
-    .dark .ok{background:#123d26;border-color:#2e7d32}
-    .dark .warn{background:#4a3f1a;border-color:#ffca2c}
-    .dark dialog.modal{background:#1e1e1e;color:#eaeaea}
-    .dark .modal-header{border-bottom-color:#333}
-    .dark .modal-actions{border-top-color:#333}
-    .dark .nav{background:#0f1113;border-color:#222}
-    .dark .nav a,.dark .nav button{color:#d6d6d6}
-    .dark .nav a:hover,.dark .nav button:hover{background:#24292e}
-    .dark .footer{color:#aaa}
+
+    .nav a,
+    .nav button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      color: #111;
+      text-decoration: none;
+      font: inherit;
+      background: none;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+      flex: 0 0 auto
+    }
+
+    .nav a:hover,
+    .nav button:hover {
+      background: #f5f5f5
+    }
+
+    .nav button {
+      width: auto;
+      text-align: left
+    }
+
+    .mobile-nav-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 8px 0
+    }
+
+    @media (max-width: 899px) {
+      .nav.is-hidden {
+        display: none
+      }
+    }
+
+    .nav .icon {
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0
+    }
+
+    .main {
+      flex: 1
+    }
+
+    .footer {
+      margin-top: 32px;
+      padding: 16px 0;
+      color: #666;
+      text-align: center;
+      font-size: 14px
+    }
+
+    @media (min-width: 900px) {
+      .layout {
+        align-items: flex-start;
+        flex-direction: row
+      }
+
+      .nav {
+        flex-direction: column;
+        width: 220px;
+        height: calc(100vh - 48px);
+        top: 24px;
+        overflow-x: visible
+      }
+
+      .nav.is-hidden {
+        display: flex
+      }
+
+      .nav button {
+        width: 100%
+      }
+
+      .main {
+        flex: 1
+      }
+
+      .mobile-nav-toggle {
+        display: none
+      }
+    }
+
+    .header h2 {
+      color: #111
+    }
+
+    .ok {
+      background: #e8f7ee;
+      border: 1px solid #2e7d32;
+      padding: 12px;
+      border-radius: 8px
+    }
+
+    .warn {
+      background: #fff3cd;
+      border: 1px solid #ffca2c;
+      padding: 12px;
+      border-radius: 8px
+    }
+
+    .hist {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0 0
+    }
+
+    .hist li {
+      padding: 8px 10px;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      margin-top: 6px;
+      display: flex;
+      gap: 8px;
+      align-items: center
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700
+    }
+
+    .pill-in {
+      background: #e8f5e9;
+      color: #1b5e20
+    }
+
+    .pill-out {
+      background: #ffebee;
+      color: #b71c1c
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 360px
+    }
+
+    input {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px
+    }
+
+    .btn-outline {
+      background: #fff;
+      color: #8a6d3b;
+      border: 1px solid #ffca2c
+    }
+
+    .btn-outline:hover {
+      background: #fff7d6
+    }
+
+    dialog.modal {
+      border: none;
+      border-radius: 12px;
+      padding: 0;
+      max-width: 740px;
+      width: 90%
+    }
+
+    dialog::backdrop {
+      background: rgba(0, 0, 0, .35)
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+      font-weight: 700
+    }
+
+    .modal-body {
+      padding: 16px
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      padding: 12px 16px;
+      border-top: 1px solid #eee
+    }
+
+    .inline {
+      display: flex;
+      gap: 8px;
+      align-items: center
+    }
+
+    .input-sm {
+      padding: 8px 10px;
+      font-size: 14px
+    }
+
+    .w-80 {
+      width: 80px
+    }
+
+    .w-120 {
+      width: 120px
+    }
+
+    .is-invalid {
+      border-color: #e31b23 !important
+    }
+
+    .dark .is-invalid {
+      border-color: #ff6b6b !important
+    }
+
+    .dark body {
+      background: #121212;
+      color: #eaeaea
+    }
+
+    .dark .card {
+      background: #1e1e1e;
+      border-color: #333
+    }
+
+    .dark .muted {
+      color: #aaa
+    }
+
+    .dark input {
+      background: #111;
+      color: #eee;
+      border-color: #444
+    }
+
+    .dark select {
+      background: #111;
+      color: #eee;
+      border-color: #444
+    }
+
+    .dark textarea {
+      background: #111;
+      color: #eee;
+      border-color: #444
+    }
+
+    .dark .btn {
+      background: #2a2a2a;
+      color: #fff
+    }
+
+    .dark .btn:hover {
+      box-shadow: 0 6px 14px rgba(0, 0, 0, .4)
+    }
+
+    .dark .btn-outline {
+      background: transparent;
+      color: #ffca2c;
+      border: 1px solid #ffca2c
+    }
+
+    .dark .btn-outline:hover {
+      background: rgba(255, 202, 44, .12)
+    }
+
+    .dark .btn-green {
+      background: #14a44d;
+      color: #fff
+    }
+
+    .dark .btn-green:hover {
+      background: #0f8c40
+    }
+
+    .dark .btn-red {
+      background: #e31b23;
+      color: #fff
+    }
+
+    .dark .btn-red:hover {
+      background: #c6171e
+    }
+
+    .dark .btn-yellow {
+      background: #f2b400;
+      color: #fff
+    }
+
+    .dark .btn-yellow:hover {
+      background: #d49c00
+    }
+
+    .dark h1,
+    .dark h2,
+    .dark h3 {
+      color: #ffffff
+    }
+
+    .dark .header h2 {
+      color: #ffffff
+    }
+
+    .dark .ok {
+      background: #123d26;
+      border-color: #2e7d32
+    }
+
+    .dark .warn {
+      background: #4a3f1a;
+      border-color: #ffca2c
+    }
+
+    .dark dialog.modal {
+      background: #1e1e1e;
+      color: #eaeaea
+    }
+
+    .dark .modal-header {
+      border-bottom-color: #333
+    }
+
+    .dark .modal-actions {
+      border-top-color: #333
+    }
+
+    .dark .nav {
+      background: #0f1113;
+      border-color: #222
+    }
+
+    .dark .nav a,
+    .dark .nav button {
+      color: #d6d6d6
+    }
+
+    .dark .nav a:hover,
+    .dark .nav button:hover {
+      background: #24292e
+    }
+
+    .dark .footer {
+      color: #aaa
+    }
   </style>
 </head>
+
 <body>
   <script>
-    document.addEventListener('DOMContentLoaded', function(){
+    document.addEventListener('DOMContentLoaded', function () {
       if (window.lucide && window.lucide.createIcons) {
         window.lucide.createIcons();
       }
     });
-    document.addEventListener('htmx:afterSwap', function(){
+    document.addEventListener('htmx:afterSwap', function () {
       if (window.lucide && window.lucide.createIcons) {
         window.lucide.createIcons();
       }
     });
-    window.toggleTheme = function(){
+    window.toggleTheme = function () {
       var root = document.documentElement;
       var dark = root.classList.toggle('dark');
-      try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch (e) {}
+      try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch (e) { }
       if (window.lucide && window.lucide.createIcons) { window.lucide.createIcons(); }
     };
   </script>
@@ -148,9 +563,10 @@
     </button>
     <nav class="nav" data-nav>
       <a href="{{ url_for('index') }}"><i data-lucide="home" class="icon"></i> Inicio</a>
-      <a href="{{ url_for('pdf_tools') }}"><i data-lucide="file-text" class="icon"></i> PDF</a>
+      <a href="{{ url_for('pdf_tools') }}"><i data-lucide="file-text" class="icon"></i> PDF2</a>
       {% if current_user.role.value == 'admin' %}
-      <a href="{{ url_for('admin_home') }}"><i data-lucide="layout-dashboard" class="icon"></i> Panel de administracion</a>
+      <a href="{{ url_for('admin_home') }}"><i data-lucide="layout-dashboard" class="icon"></i> Panel de
+        administracion</a>
       {% endif %}
       <a href="{{ url_for('requests_page') }}"><i data-lucide="file-plus" class="icon"></i> Solicitudes</a>
       <a href="{{ url_for('info_page') }}"><i data-lucide="info" class="icon"></i> Informacion</a>
@@ -158,7 +574,8 @@
       <a href="{{ url_for('firmas_page') }}"><i data-lucide="pen-line" class="icon"></i> Firmas</a>
       <button type="button" data-help-button>
         <span class="icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" width="18" height="18">
             <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10Z" />
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
             <path d="M12 17h.01" />
@@ -170,13 +587,13 @@
     {% endif %}
     <main class="main">
       {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="row">
-            {% for cat, msg in messages %}
-              <div class="{{ 'warn' if cat=='error' else 'ok' }}">{{ msg }}</div>
-            {% endfor %}
-          </div>
-        {% endif %}
+      {% if messages %}
+      <div class="row">
+        {% for cat, msg in messages %}
+        <div class="{{ 'warn' if cat=='error' else 'ok' }}">{{ msg }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
       {% endwith %}
       {% block content %}{% endblock %}
     </main>
@@ -202,21 +619,21 @@
     </div>
   </dialog>
   <script>
-    (function(){
-      function bindHelp(){
+    (function () {
+      function bindHelp() {
         var helpButton = document.querySelector('[data-help-button]');
         var dialog = document.getElementById('help-dialog');
         if (!helpButton || !dialog) { return; }
         var closers = dialog.querySelectorAll('[data-help-close]');
-        helpButton.addEventListener('click', function(){
+        helpButton.addEventListener('click', function () {
           if (dialog.showModal) {
             dialog.showModal();
           } else {
             alert('Aplicación web de fichaje rápido que registra entradas, salidas y pausas de empleados y gestiona roles, permisos y accesos de invitados.');
           }
         });
-        closers.forEach(function(btn){
-          btn.addEventListener('click', function(){ dialog.close(); });
+        closers.forEach(function (btn) {
+          btn.addEventListener('click', function () { dialog.close(); });
         });
       }
       if (document.readyState === 'loading') {
@@ -227,8 +644,8 @@
     })();
   </script>
   <script>
-    (function(){
-      function bindNavToggle(){
+    (function () {
+      function bindNavToggle() {
         var toggle = document.querySelector('[data-nav-toggle]');
         var nav = document.querySelector('[data-nav]');
         if (!toggle || !nav) { return; }
@@ -236,10 +653,10 @@
           var isSmall = window.matchMedia && window.matchMedia('(max-width: 899px)').matches;
           var saved = localStorage.getItem('navHidden');
           if (isSmall && saved === '1') { nav.classList.add('is-hidden'); }
-        } catch (e) {}
-        toggle.addEventListener('click', function(){
+        } catch (e) { }
+        toggle.addEventListener('click', function () {
           nav.classList.toggle('is-hidden');
-          try { localStorage.setItem('navHidden', nav.classList.contains('is-hidden') ? '1' : '0'); } catch (e) {}
+          try { localStorage.setItem('navHidden', nav.classList.contains('is-hidden') ? '1' : '0'); } catch (e) { }
           if (window.lucide && window.lucide.createIcons) { window.lucide.createIcons(); }
         });
       }
@@ -251,5 +668,5 @@
     })();
   </script>
 </body>
-</html>
 
+</html>
