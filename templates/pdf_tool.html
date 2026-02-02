@@ -428,10 +428,13 @@
       applyHighlights(null);
       readFileAsArrayBuffer(file)
         .then(function (uint8) {
-          currentPdfBytes = uint8;
+          // CLONE the data for local storage, because passing 'uint8' to PDF.js
+          // (especially in worker mode) might transfer/detach the buffer.
+          currentPdfBytes = uint8.slice(0); // Deep copy
+
           applyHighlights(null);
           if (nativeViewer) {
-            var blob = new Blob([uint8], { type: 'application/pdf' });
+            var blob = new Blob([currentPdfBytes], { type: 'application/pdf' });
             var url = URL.createObjectURL(blob);
             nativeViewer.data = url;
             nativeViewer.style.display = 'block';
@@ -580,8 +583,29 @@
         alert("La librería PDF-Lib no se ha cargado correctamente.");
         return;
       }
+
+      // DEBUG: Verificar entrada
       try {
-        var pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+        console.log("Generating Redacted PDF...");
+        console.log("Type:", pdfBytes ? pdfBytes.constructor.name : "null");
+        console.log("Length:", pdfBytes ? pdfBytes.length : 0);
+        if (pdfBytes && pdfBytes.length > 4) {
+          var header = String.fromCharCode(pdfBytes[0], pdfBytes[1], pdfBytes[2], pdfBytes[3]);
+          console.log("Header:", header);
+          if (header !== "%PDF") {
+            console.error("Invalid PDF Header:", header);
+            alert("El archivo en memoria no parece ser un PDF válido (Header incorrecto). Intenta recargar la página.");
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("Debug Error:", e);
+      }
+
+      try {
+        // Clonamos para evitar problemas de referencia o modificación
+        var pdfCopy = new Uint8Array(pdfBytes);
+        var pdfDoc = await PDFLib.PDFDocument.load(pdfCopy, { ignoreEncryption: true });
         var pages = pdfDoc.getPages();
 
         if (!currentPdfDoc) {
