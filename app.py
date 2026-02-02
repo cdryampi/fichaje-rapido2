@@ -1015,15 +1015,15 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
 
     excerpt_cache: dict[int, str] = {}
 
+    # Prompt relajado para mejorar recall
     system_prompt = (
-        "Eres un asistente experto en privacidad de datos. "
-        "Recibes fragmentos extraídos de un PDF y una lista de valores detectados. "
-        "Debes indicar si cada valor es realmente un dato personal o sensible. "
-        "Considera como datos sensibles: identificadores personales (DNI, NIE, pasaporte), "
-        "datos de contacto, direcciones, información laboral identificable, datos bancarios, "
-        "salud, información biométrica, etc. Ignora valores genéricos o que no puedan "
-        "atribuirse claramente a una persona. Devuelve exclusivamente un único objeto JSON "
-        "válido que cumpla el esquema indicado sin texto adicional."
+        "Eres un experto en protección de datos y privacidad. "
+        "Analiza los siguientes candidatos extraídos de un documento PDF. "
+        "Tu objetivo es identificar CUALQUIER dato que PUEDA ser sensible o personal. "
+        "Ante la duda, SIEMPRE clasifícalo como sensible (sensitive). "
+        "Incluye: Nombres, Emails, Teléfonos, Direcciones, DNI/NIE, cuentas bancarias, fechas de nacimiento, etc. "
+        "No descartes un dato solo porque falte contexto explícito; si parece un dato personal, márcalo. "
+        "Devuelve un JSON válido estrictamente con el esquema solicitado."
     )
     response_format = {
         "type": "json_schema",
@@ -1070,6 +1070,9 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
     total_chunks = (len(candidates) + chunk_size - 1) // chunk_size or 1
     combined_sensitive: list[dict] = []
     combined_non_sensitive: list[dict] = []
+    # Colección de trazas de depuración
+    debug_traces: list[dict] = []
+    
     supports_response_format = True
     queue = deque()
 
@@ -1091,7 +1094,7 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         )
 
     if not queue:
-        return {"sensitive": [], "non_sensitive": [], "model": model}
+        return {"sensitive": [], "non_sensitive": [], "model": model, "debug": []}
 
     def _get_excerpt(limit: int) -> str:
         if limit not in excerpt_cache:
@@ -1123,6 +1126,17 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         }
         if supports_response_format:
             request_kwargs["response_format"] = response_format
+        
+        # Trace info for this call
+        trace_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "model": model,
+            "input_system": system_prompt,
+            "input_user": user_prompt,
+            "output_raw": None,
+            "error": None
+        }
+
         try:
             response = client.responses.create(**request_kwargs)
         except TypeError as exc:
@@ -1131,8 +1145,12 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
                 request_kwargs.pop("response_format", None)
                 response = client.responses.create(**request_kwargs)
             else:
+                trace_entry["error"] = str(exc)
+                debug_traces.append(trace_entry)
                 raise
         except Exception as exc:  # pragma: no cover
+            trace_entry["error"] = str(exc)
+            debug_traces.append(trace_entry)
             raise RuntimeError(f"Fallo al invocar al modelo {model}: {exc}") from exc
 
         try:
@@ -1147,6 +1165,9 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
                         chunks_text.append(getattr(piece, "text", ""))
             if not content:
                 content = "".join(chunks_text).strip()
+            
+            trace_entry["output_raw"] = content
+
             if not content:
                 raise ValueError("empty content")
             if not truncated:
@@ -1155,7 +1176,12 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
                 if output_tokens and output_tokens >= max_tokens:
                     truncated = True
         except Exception as exc:  # pragma: no cover
+            trace_entry["error"] = f"Error leyendo respuesta: {exc}"
+            debug_traces.append(trace_entry)
             raise RuntimeError("La respuesta del modelo no fue legible.") from exc
+
+        # Guardamos la traza correcta antes de parsear
+        debug_traces.append(trace_entry)
 
         try:
             parsed = _parse_model_json(content)
@@ -1181,7 +1207,9 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
                 last_error = None
             except RuntimeError as exc:
                 last_error = exc
-                truncated = False
+                truncated = False # Stop retrying limits if it's a runtime error not related to context length? 
+                                  # Actually, the original code treated RuntimeError as a break condition for the limit loop. 
+                                  # We keep it similar but ensuring traces are logged inside _call_model.
                 break
             if not truncated:
                 combined_sensitive.extend(sensitive_chunk)
@@ -1235,6 +1263,7 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         "sensitive": combined_sensitive,
         "non_sensitive": combined_non_sensitive,
         "model": model,
+        "debug": debug_traces,
     }
 
 

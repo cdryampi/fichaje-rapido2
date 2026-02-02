@@ -9,7 +9,8 @@
   <div class="pdf-layout">
     <section class="card pdf-uploader">
       <h3>Selecciona un archivo</h3>
-      <p class="muted">Solo se admiten archivos en formato PDF. El documento se carga de forma local en tu navegador.</p>
+      <p class="muted">Solo se admiten archivos en formato PDF. El documento se carga de forma local en tu navegador.
+      </p>
       <label class="file-picker">
         <input type="file" id="pdf-file-input" accept="application/pdf" />
         <span class="file-picker__hint">
@@ -39,6 +40,16 @@
           </label>
         </div>
         <ul class="detection-list" data-detection-list></ul>
+
+        <!-- Debug Section -->
+        <details class="debug-details" data-debug-container
+          style="display: none; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">
+          <summary style="cursor: pointer; font-size: 12px; color: #94a3b8; user-select: none;">Ver depuracion AI
+          </summary>
+          <div data-debug-content
+            style="margin-top: 8px; font-family: monospace; font-size: 11px; white-space: pre-wrap; color: #cbd5e1; max-height: 300px; overflow-y: auto;">
+          </div>
+        </details>
       </div>
       <p class="muted small">El PDF no se guarda en el servidor; se muestra solo para ti.</p>
     </section>
@@ -55,64 +66,359 @@
   </div>
 </section>
 <style>
-  .pdf-page{display:flex;flex-direction:column;gap:16px}
-  .pdf-layout{display:flex;flex-direction:column;gap:16px}
-  .pdf-page .card{max-width:none;width:100%}
-  .pdf-uploader{flex:0 0 auto;width:100%}
-  .pdf-viewer{flex:1 1 auto;min-width:0}
-  .pdf-uploader h3,.pdf-viewer h3{margin-top:0;margin-bottom:12px}
-  .pdf-viewer__frame{position:relative;height:85vh;min-height:720px;border:1px dashed #d0d0d0;border-radius:12px;overflow:hidden;background:#fafafa;width:100%}
-  .pdf-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;padding:24px;color:#666}
-  .pdf-placeholder .icon{width:36px;height:36px}
-  .pdf-placeholder.is-hidden{display:none}
-  .pdf-renderer{display:none;position:absolute;inset:0;padding:24px 32px 24px 24px;overflow:auto;background:#fff}
-  .pdf-renderer.is-visible{display:block}
-  .pdf-page-render{position:relative;margin:0 auto 24px auto;box-shadow:0 8px 22px rgba(15,23,42,.08);border-radius:6px;background:#fff}
-  .pdf-page-render:last-child{margin-bottom:0}
-  .pdf-page-render canvas{display:block;width:100%;height:auto;border-radius:6px}
-  .pdf-text-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;font-family:inherit;line-height:1;white-space:pre}
-  .pdf-text-layer div{position:absolute;transform-origin:0 0;color:transparent!important}
-  .pdf-text-layer span{color:transparent!important}
-  .pdf-text-layer .pdf-highlight{color:#111!important}
-  .pdf-highlight{background:rgba(255,235,59,.65);border-radius:3px;box-shadow:0 0 6px rgba(255,213,0,.4)}
-  .pdf-redaction{display:inline-block;background:#111827!important;color:transparent!important;position:relative;border-radius:3px;box-shadow:none!important}
-  .pdf-redaction::after{content:"";position:absolute;inset:0;background:rgba(15,23,42,.92);border-radius:3px}
-  .file-picker{display:flex;align-items:center;justify-content:center;gap:12px;padding:16px;border:1px dashed #bbb;border-radius:12px;background:#fff;cursor:pointer;transition:border-color .2s ease,background-color .2s ease}
-  .file-picker:hover{border-color:#888;background:#f5f5f5}
-  .file-picker input{display:none}
-  .file-picker__hint{display:flex;gap:10px;align-items:center;color:#333;font-weight:600}
-  .file-picker__hint .icon{width:20px;height:20px}
-  .muted.small{font-size:13px}
-  .detect-btn{margin-top:6px;width:100%;justify-content:center}
-  .detection-panel{margin-top:14px;padding:16px;border:1px solid #1f2937;border-radius:10px;background:#1e293b;color:#e2e8f0;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 30px rgba(15,23,42,.35)}
-  .detection-panel h4{margin:0;font-size:15px;color:#f1f5f9}
-  .detection-controls{display:flex;justify-content:flex-end}
-  .detection-controls.is-hidden{display:none}
-  .detection-checkbox-label{display:flex;align-items:center;gap:8px;font-size:13px;color:inherit;cursor:pointer}
-  .detection-checkbox-label input{width:16px;height:16px}
-  .detection-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-  .detection-list li{padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.08);border:1px solid rgba(148,163,184,.4);font-size:14px;line-height:1.5;color:#f8fafc}
-  .detection-item{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px}
-  .detection-values{display:flex;flex-direction:column;gap:6px;flex:1}
-  .detection-option{display:flex;align-items:flex-start;gap:8px;color:inherit;cursor:pointer;flex:1}
-  .detection-option input{margin-top:2px;flex:0 0 auto}
-  .detection-option span{display:block;color:inherit;flex:1}
-  .detection-tag{display:inline-block;margin-right:8px;padding:2px 8px;border-radius:999px;background:#ffe7c2;color:#8a6d3b;font-size:12px;font-weight:700;text-transform:uppercase}
-  .detection-empty{color:#cbd5f5;font-style:italic}
-  .detection-reason{margin-top:4px;font-size:12px;color:#cbd5f5}
-  .dark .detection-panel{background:#111827;border-color:#334155;color:#e2e8f0;box-shadow:0 12px 30px rgba(2,6,23,.6)}
-  .dark .detection-panel h4{color:#f8fafc}
-  .dark .detection-list li{background:rgba(148,163,184,.12);border-color:rgba(148,163,184,.35)}
-  .dark .detection-empty{color:#94a3b8}
-  .dark .detection-reason{color:#cbd5f5}
-  .dark .pdf-redaction::after{background:rgba(2,6,23,.92)}
-  @media (min-width:900px){
-    .pdf-layout{flex-direction:row;align-items:flex-start;gap:24px}
-    .pdf-uploader{flex:0 0 360px;max-width:360px}
+  .pdf-page {
+    display: flex;
+    flex-direction: column;
+    gap: 16px
+  }
+
+  .pdf-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px
+  }
+
+  .pdf-page .card {
+    max-width: none;
+    width: 100%
+  }
+
+  .pdf-uploader {
+    flex: 0 0 auto;
+    width: 100%
+  }
+
+  .pdf-viewer {
+    flex: 1 1 auto;
+    min-width: 0
+  }
+
+  .pdf-uploader h3,
+  .pdf-viewer h3 {
+    margin-top: 0;
+    margin-bottom: 12px
+  }
+
+  .pdf-viewer__frame {
+    position: relative;
+    height: 85vh;
+    min-height: 720px;
+    border: 1px dashed #d0d0d0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fafafa;
+    width: 100%
+  }
+
+  .pdf-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    color: #666
+  }
+
+  .pdf-placeholder .icon {
+    width: 36px;
+    height: 36px
+  }
+
+  .pdf-placeholder.is-hidden {
+    display: none
+  }
+
+  .pdf-renderer {
+    display: none;
+    position: absolute;
+    inset: 0;
+    padding: 24px 32px 24px 24px;
+    overflow: auto;
+    background: #fff
+  }
+
+  .pdf-renderer.is-visible {
+    display: block
+  }
+
+  .pdf-page-render {
+    position: relative;
+    margin: 0 auto 24px auto;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, .08);
+    border-radius: 6px;
+    background: #fff
+  }
+
+  .pdf-page-render:last-child {
+    margin-bottom: 0
+  }
+
+  .pdf-page-render canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 6px
+  }
+
+  .pdf-text-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    font-family: inherit;
+    line-height: 1;
+    white-space: pre
+  }
+
+  .pdf-text-layer div {
+    position: absolute;
+    transform-origin: 0 0;
+    color: transparent !important
+  }
+
+  .pdf-text-layer span {
+    color: transparent !important
+  }
+
+  .pdf-text-layer .pdf-highlight {
+    color: #111 !important
+  }
+
+  .pdf-highlight {
+    background: rgba(255, 235, 59, .65);
+    border-radius: 3px;
+    box-shadow: 0 0 6px rgba(255, 213, 0, .4)
+  }
+
+  .pdf-redaction {
+    display: inline-block;
+    background: #111827 !important;
+    color: transparent !important;
+    position: relative;
+    border-radius: 3px;
+    box-shadow: none !important
+  }
+
+  .pdf-redaction::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, .92);
+    border-radius: 3px
+  }
+
+  .file-picker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+    border: 1px dashed #bbb;
+    border-radius: 12px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .2s ease, background-color .2s ease
+  }
+
+  .file-picker:hover {
+    border-color: #888;
+    background: #f5f5f5
+  }
+
+  .file-picker input {
+    display: none
+  }
+
+  .file-picker__hint {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    color: #333;
+    font-weight: 600
+  }
+
+  .file-picker__hint .icon {
+    width: 20px;
+    height: 20px
+  }
+
+  .muted.small {
+    font-size: 13px
+  }
+
+  .detect-btn {
+    margin-top: 6px;
+    width: 100%;
+    justify-content: center
+  }
+
+  .detection-panel {
+    margin-top: 14px;
+    padding: 16px;
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    background: #1e293b;
+    color: #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, .35)
+  }
+
+  .detection-panel h4 {
+    margin: 0;
+    font-size: 15px;
+    color: #f1f5f9
+  }
+
+  .detection-controls {
+    display: flex;
+    justify-content: flex-end
+  }
+
+  .detection-controls.is-hidden {
+    display: none
+  }
+
+  .detection-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: inherit;
+    cursor: pointer
+  }
+
+  .detection-checkbox-label input {
+    width: 16px;
+    height: 16px
+  }
+
+  .detection-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px
+  }
+
+  .detection-list li {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .08);
+    border: 1px solid rgba(148, 163, 184, .4);
+    font-size: 14px;
+    line-height: 1.5;
+    color: #f8fafc
+  }
+
+  .detection-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px
+  }
+
+  .detection-values {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1
+  }
+
+  .detection-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: inherit;
+    cursor: pointer;
+    flex: 1
+  }
+
+  .detection-option input {
+    margin-top: 2px;
+    flex: 0 0 auto
+  }
+
+  .detection-option span {
+    display: block;
+    color: inherit;
+    flex: 1
+  }
+
+  .detection-tag {
+    display: inline-block;
+    margin-right: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #ffe7c2;
+    color: #8a6d3b;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase
+  }
+
+  .detection-empty {
+    color: #cbd5f5;
+    font-style: italic
+  }
+
+  .detection-reason {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #cbd5f5
+  }
+
+  .dark .detection-panel {
+    background: #111827;
+    border-color: #334155;
+    color: #e2e8f0;
+    box-shadow: 0 12px 30px rgba(2, 6, 23, .6)
+  }
+
+  .dark .detection-panel h4 {
+    color: #f8fafc
+  }
+
+  .dark .detection-list li {
+    background: rgba(148, 163, 184, .12);
+    border-color: rgba(148, 163, 184, .35)
+  }
+
+  .dark .detection-empty {
+    color: #94a3b8
+  }
+
+  .dark .detection-reason {
+    color: #cbd5f5
+  }
+
+  .dark .pdf-redaction::after {
+    background: rgba(2, 6, 23, .92)
+  }
+
+  @media (min-width:900px) {
+    .pdf-layout {
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 24px
+    }
+
+    .pdf-uploader {
+      flex: 0 0 360px;
+      max-width: 360px
+    }
   }
 </style>
 <script>
-  (function(){
+  (function () {
     var PDFJS_SRC = "{{ url_for('static', filename='vendor/pdfjs/pdf.min.js') }}";
     var PDFJS_WORKER_SRC = "{{ url_for('static', filename='vendor/pdfjs/pdf.worker.min.js') }}";
     var PDFJS_FALLBACK_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
@@ -129,6 +435,8 @@
     var detectionList = document.querySelector("[data-detection-list]");
     var selectAllCheckbox = document.getElementById("sensitive-select-all");
     var selectAllContainer = document.querySelector("[data-select-all-container]");
+    var debugContainer = document.querySelector("[data-debug-container]");
+    var debugContent = document.querySelector("[data-debug-content]");
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');
     if (!fileInput || !loadButton || !renderer || !container || !detectButton || !obfuscateButton || !detectionSummary || !detectionList || !selectAllCheckbox || !selectAllContainer) { return; }
 
@@ -142,7 +450,7 @@
     var selectionState = Object.create(null);
     var activeRedactions = [];
 
-    fileInput.addEventListener("change", function(){
+    fileInput.addEventListener("change", function () {
       if (fileNameTarget) {
         var file = fileInput.files && fileInput.files[0];
         fileNameTarget.textContent = file ? file.name : "Selecciona un PDF desde tu equipo";
@@ -154,10 +462,11 @@
       activeRedactions = [];
       clearSelections();
       showSelectAllControls(false);
+      showDebugInfo(null);
       obfuscateButton.disabled = true;
     });
 
-    loadButton.addEventListener("click", function(){
+    loadButton.addEventListener("click", function () {
       var file = fileInput.files && fileInput.files[0];
       if (!file) {
         alert("Selecciona un archivo PDF antes de cargarlo.");
@@ -170,6 +479,7 @@
       loadButton.blur();
       clearSelections();
       showSelectAllControls(false);
+      showDebugInfo(null);
       obfuscateButton.disabled = true;
       activeRedactions = [];
       detectionSummary.textContent = "Renderizando PDF...";
@@ -182,15 +492,15 @@
       latestFindings = null;
       applyHighlights(null);
       readFileAsArrayBuffer(file)
-        .then(function(uint8){
+        .then(function (uint8) {
           currentPdfBytes = uint8;
           return renderPdfDocument(currentPdfBytes);
         })
-        .then(function(){
+        .then(function () {
           detectionSummary.textContent = "El PDF esta listo para analizar. Los hallazgos se resaltaran en amarillo.";
           detectionList.innerHTML = '<li class="detection-empty">Pulsa "Detectar datos sensibles" para iniciar el analisis.</li>';
         })
-        .catch(function(err){
+        .catch(function (err) {
           console.error(err);
           detectionSummary.textContent = "No se pudo mostrar el PDF (" + (err && err.message ? err.message : "error desconocido") + ").";
           detectionList.innerHTML = '<li class="detection-empty">Intenta cargar el documento de nuevo.</li>';
@@ -198,7 +508,7 @@
         });
     });
 
-    detectButton.addEventListener("click", function(){
+    detectButton.addEventListener("click", function () {
       var file = fileInput.files && fileInput.files[0];
       if (!file) {
         alert("Selecciona un archivo PDF antes de analizarlo.");
@@ -211,6 +521,7 @@
       detectButton.disabled = true;
       clearSelections();
       showSelectAllControls(false);
+      showDebugInfo(null);
       obfuscateButton.disabled = true;
       activeRedactions = [];
       detectionSummary.textContent = "Analizando PDF en busca de datos sensibles...";
@@ -218,42 +529,42 @@
 
       var analysisPromise = currentPdfBytes
         ? Promise.resolve(currentPdfBytes)
-        : readFileAsArrayBuffer(file).then(function(uint8){
-            currentPdfBytes = uint8;
-            return uint8;
-          });
+        : readFileAsArrayBuffer(file).then(function (uint8) {
+          currentPdfBytes = uint8;
+          return uint8;
+        });
 
       analysisPromise
-        .then(function(bytes){
-          return ensurePdfJs().then(function(pdfjs){
+        .then(function (bytes) {
+          return ensurePdfJs().then(function (pdfjs) {
             var docPromise = currentPdfDoc
               ? Promise.resolve(currentPdfDoc)
-              : pdfjs.getDocument({ data: bytes }).promise.then(function(doc){
-                  currentPdfDoc = doc;
-                  return doc;
-                });
-            return docPromise.then(function(pdfDoc){
+              : pdfjs.getDocument({ data: bytes }).promise.then(function (doc) {
+                currentPdfDoc = doc;
+                return doc;
+              });
+            return docPromise.then(function (pdfDoc) {
               var textPromises = [];
               for (var i = 1; i <= pdfDoc.numPages; i++) {
                 textPromises.push(
-                  pdfDoc.getPage(i).then(function(page){
-                    return page.getTextContent().then(function(content){
-                      return content.items.map(function(item){ return item.str; }).join(" ");
+                  pdfDoc.getPage(i).then(function (page) {
+                    return page.getTextContent().then(function (content) {
+                      return content.items.map(function (item) { return item.str; }).join(" ");
                     });
                   })
                 );
               }
-              return Promise.all(textPromises).then(function(pages){
+              return Promise.all(textPromises).then(function (pages) {
                 return pages.join("\n");
               });
             });
           });
         })
-        .then(function(fullText){
+        .then(function (fullText) {
           documentFullText = fullText || "";
           return processSensitiveData(documentFullText);
         })
-        .catch(function(err){
+        .catch(function (err) {
           console.error(err);
           var message = err && err.message ? err.message : "Hubo un problema analizando el PDF.";
           detectionSummary.textContent = message;
@@ -266,12 +577,12 @@
             detectionList.innerHTML = '<li class="detection-empty">No fue posible analizar el documento.</li>';
           }
         })
-        .finally(function(){
+        .finally(function () {
           detectButton.disabled = false;
         });
     });
 
-    obfuscateButton.addEventListener("click", function(){
+    obfuscateButton.addEventListener("click", function () {
       if (!latestFindings || !latestFindings.length) {
         alert("Detecta los datos sensibles antes de emborronarlos.");
         return;
@@ -293,7 +604,7 @@
       }
     });
 
-    detectionList.addEventListener("change", function(event){
+    detectionList.addEventListener("change", function (event) {
       var target = event.target;
       if (!target || !target.matches('input[data-entry-key]')) { return; }
       var key = target.getAttribute("data-entry-key");
@@ -315,16 +626,16 @@
       }
     });
 
-    selectAllCheckbox.addEventListener("change", function(){
+    selectAllCheckbox.addEventListener("change", function () {
       var checked = !!selectAllCheckbox.checked;
       var keys = Object.keys(selectionState);
       if (keys.length) {
-        keys.forEach(function(key){
+        keys.forEach(function (key) {
           if (!selectionState[key]) { return; }
           selectionState[key].selected = checked;
         });
       }
-      detectionList.querySelectorAll('input[data-entry-key]').forEach(function(input){
+      detectionList.querySelectorAll('input[data-entry-key]').forEach(function (input) {
         input.checked = checked;
       });
       selectAllCheckbox.indeterminate = false;
@@ -335,7 +646,7 @@
 
     window.addEventListener("beforeunload", destroyCurrentPdf);
 
-    function processSensitiveData(fullText){
+    function processSensitiveData(fullText) {
       var groups = collectCandidateGroups(fullText);
       if (!groups.length) {
         detectionSummary.textContent = "No se detectaron patrones sensibles evidentes.";
@@ -344,13 +655,17 @@
         activeRedactions = [];
         clearSelections();
         showSelectAllControls(false);
+        showDebugInfo(null);
         obfuscateButton.disabled = true;
         return Promise.resolve();
       }
       detectionSummary.textContent = "Validando coincidencias con IA...";
       detectionList.innerHTML = '<li class="detection-empty">Esperando validacion de IA...</li>';
       return callAiValidation(fullText, groups)
-        .then(function(aiData){
+        .then(function (aiData) {
+          if (aiData && aiData.debug) {
+            showDebugInfo(aiData.debug);
+          }
           if (aiData && aiData.sensitive && aiData.sensitive.length) {
             var grouped = groupByLabel(aiData.sensitive);
             prepareSelectionState(grouped);
@@ -359,7 +674,7 @@
             showSelectAllControls(true);
             obfuscateButton.disabled = false;
             activeRedactions = [];
-            var total = grouped.reduce(function(acc, item){
+            var total = grouped.reduce(function (acc, item) {
               return acc + (item.entries ? item.entries.length : 0);
             }, 0);
             var note = aiData.model ? " (modelo " + aiData.model + ")" : "";
@@ -376,7 +691,7 @@
           obfuscateButton.disabled = true;
           applyHighlights(null);
         })
-        .catch(function(err){
+        .catch(function (err) {
           console.error(err);
           detectionSummary.textContent = "Fallo la validacion con IA (" + err.message + "). Se muestran coincidencias basicas.";
           detectionSummary.dataset.baseMessage = detectionSummary.textContent;
@@ -390,11 +705,11 @@
         });
     }
 
-    function callAiValidation(fullText, groups){
+    function callAiValidation(fullText, groups) {
       var flattened = [];
-      groups.forEach(function(group){
+      groups.forEach(function (group) {
         if (!group || !group.entries) { return; }
-        group.entries.forEach(function(entry){
+        group.entries.forEach(function (entry) {
           if (!entry || !entry.value) { return; }
           flattened.push({ label: group.label, value: entry.value });
         });
@@ -415,8 +730,8 @@
           text: fullText,
           candidates: flattened
         })
-      }).then(function(response){
-        return response.text().then(function(bodyText){
+      }).then(function (response) {
+        return response.text().then(function (bodyText) {
           var data = {};
           if (bodyText) {
             try {
@@ -434,43 +749,43 @@
       });
     }
 
-    function collectCandidateGroups(text){
+    function collectCandidateGroups(text) {
       var detectors = [
         {
           label: "Telefonos",
-          regex: function(){ return /\b(?:\+?\d{2,3}[\s.-]?)?(?:\d[\s.-]?){9,12}\b/g; },
-          filter: function(value){
+          regex: function () { return /\b(?:\+?\d{2,3}[\s.-]?)?(?:\d[\s.-]?){9,12}\b/g; },
+          filter: function (value) {
             return value.replace(/\D/g, "").length >= 9;
           }
         },
         {
           label: "Emails",
-          regex: function(){ return /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi; }
+          regex: function () { return /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi; }
         },
         {
           label: "Nombres completos",
-          regex: function(){ return /\b(?:[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+(?:\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+){1,3})\b/g; },
-          filter: function(value){
+          regex: function () { return /\b(?:[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+(?:\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+){1,3})\b/g; },
+          filter: function (value) {
             return value.split(/\s+/).length >= 2;
           }
         },
         {
           label: "Direcciones",
-          regex: function(){ return /\b(?:calle|c\/|avenida|av\.?|paseo|plaza|camino|carretera)\s+[A-Z\u00C0-\u017Fa-z\u00C0-\u017F0-9\s.,-]{3,60}\b/gi; }
+          regex: function () { return /\b(?:calle|c\/|avenida|av\.?|paseo|plaza|camino|carretera)\s+[A-Z\u00C0-\u017Fa-z\u00C0-\u017F0-9\s.,-]{3,60}\b/gi; }
         },
         {
           label: "Codigos postales",
-          regex: function(){ return /\b\d{5}\b/g; }
+          regex: function () { return /\b\d{5}\b/g; }
         }
       ];
 
       var groups = [];
-      detectors.forEach(function(det){
+      detectors.forEach(function (det) {
         var matches = collectMatches(det.regex, text, det.filter);
         if (matches.length) {
           groups.push({
             label: det.label,
-            entries: matches.map(function(value){
+            entries: matches.map(function (value) {
               return { value: value };
             })
           });
@@ -479,9 +794,9 @@
       return groups;
     }
 
-    function groupByLabel(items){
+    function groupByLabel(items) {
       var grouped = Object.create(null);
-      items.forEach(function(item){
+      items.forEach(function (item) {
         if (!item || !item.label || !item.value) { return; }
         if (!grouped[item.label]) {
           grouped[item.label] = [];
@@ -492,12 +807,12 @@
           confidence: item.confidence || ""
         });
       });
-      return Object.keys(grouped).map(function(label){
+      return Object.keys(grouped).map(function (label) {
         return { label: label, entries: grouped[label] };
       });
     }
 
-    function renderResultsList(groups, listEl, options){
+    function renderResultsList(groups, listEl, options) {
       if (!groups || !groups.length) {
         listEl.innerHTML = '<li class="detection-empty">Sin coincidencias.</li>';
         return;
@@ -505,10 +820,10 @@
       var maxPerLabel = options && options.maxPerLabel ? options.maxPerLabel : 10;
       var showReason = !!(options && options.showReason);
       var withSelection = options && Object.prototype.hasOwnProperty.call(options, "withSelection") ? !!options.withSelection : true;
-      var html = groups.map(function(group){
+      var html = groups.map(function (group) {
         var safeLabel = escapeHtml(group.label || "");
         var entries = group.entries ? group.entries.slice(0, maxPerLabel) : [];
-        var valuesHtml = entries.map(function(entry){
+        var valuesHtml = entries.map(function (entry) {
           var details = [];
           if (showReason && entry.reason) {
             details.push(entry.reason);
@@ -532,12 +847,12 @@
       listEl.innerHTML = html;
     }
 
-    function prepareSelectionState(groups){
+    function prepareSelectionState(groups) {
       selectionState = Object.create(null);
       if (!groups || !groups.length) { return; }
-      groups.forEach(function(group){
+      groups.forEach(function (group) {
         if (!group || !group.entries) { return; }
-        group.entries.forEach(function(entry){
+        group.entries.forEach(function (entry) {
           if (!entry || !entry.value) { return; }
           var key = buildEntryKey(group.label || "", entry.value);
           selectionState[key] = {
@@ -549,9 +864,9 @@
       });
     }
 
-    function clearSelections(){
+    function clearSelections() {
       selectionState = Object.create(null);
-      detectionList.querySelectorAll('input[data-entry-key]').forEach(function(input){
+      detectionList.querySelectorAll('input[data-entry-key]').forEach(function (input) {
         input.checked = false;
       });
       if (selectAllCheckbox) {
@@ -566,7 +881,7 @@
       }
     }
 
-    function updateSelectAllUi(){
+    function updateSelectAllUi() {
       if (!selectAllCheckbox) { return; }
       var keys = Object.keys(selectionState);
       if (!keys.length) {
@@ -575,7 +890,7 @@
         return;
       }
       var selectedCount = 0;
-      keys.forEach(function(key){
+      keys.forEach(function (key) {
         var entry = selectionState[key];
         if (entry && entry.selected) {
           selectedCount++;
@@ -593,7 +908,7 @@
       }
     }
 
-    function showSelectAllControls(show){
+    function showSelectAllControls(show) {
       if (!selectAllContainer) { return; }
       if (show) {
         selectAllContainer.classList.remove("is-hidden");
@@ -602,11 +917,31 @@
       }
     }
 
-    function buildEntryKey(label, value){
+    function showDebugInfo(traces) {
+      if (!debugContainer || !debugContent) return;
+      if (!traces || !traces.length) {
+        debugContainer.style.display = "none";
+        debugContent.innerHTML = "";
+        return;
+      }
+      debugContainer.style.display = "block";
+      var html = traces.map(function (t, idx) {
+        var err = t.error ? ('<span style="color:#f87171">ERROR: ' + escapeHtml(t.error) + '</span>\n') : '';
+        return '<strong>[' + idx + '] ' + escapeHtml(t.model || "?") + ' - ' + escapeHtml(t.timestamp || "") + '</strong>\n' +
+          err +
+          '--- SYSTEM PROMPT ---\n' + escapeHtml(t.input_system || "") + '\n\n' +
+          '--- USER PROMPT ---\n' + escapeHtml(t.input_user || "") + '\n\n' +
+          '--- OUTPUT RAW ---\n' + escapeHtml(t.output_raw || "<empty>") + '\n\n' +
+          '========================================\n\n';
+      }).join("");
+      debugContent.innerHTML = html;
+    }
+
+    function buildEntryKey(label, value) {
       return encodeURIComponent(label || "") + "::" + encodeURIComponent(value || "");
     }
 
-    function decodeEntryKey(key){
+    function decodeEntryKey(key) {
       if (!key) { return { label: "", value: "" }; }
       var parts = key.split("::");
       var label = "";
@@ -628,10 +963,10 @@
       return { label: label, value: value };
     }
 
-    function getSelectedValues(){
+    function getSelectedValues() {
       var values = [];
       var seen = Object.create(null);
-      Object.keys(selectionState).forEach(function(key){
+      Object.keys(selectionState).forEach(function (key) {
         var entry = selectionState[key];
         if (!entry || !entry.selected) { return; }
         var value = entry.value ? entry.value.trim() : "";
@@ -646,16 +981,16 @@
       return values;
     }
 
-    function getCsrfToken(){
+    function getCsrfToken() {
       return csrfMeta ? csrfMeta.getAttribute("content") : null;
     }
 
-    function isPdfFile(file){
+    function isPdfFile(file) {
       var name = file && file.name ? file.name : "";
       return file && (file.type === "application/pdf" || /\.pdf$/i.test(name));
     }
 
-    function resetViewer(){
+    function resetViewer() {
       if (renderer) {
         renderer.innerHTML = "";
         renderer.classList.remove("is-visible");
@@ -670,20 +1005,20 @@
       activeRedactions = [];
     }
 
-    function destroyCurrentPdf(){
+    function destroyCurrentPdf() {
       if (currentPdfDoc && typeof currentPdfDoc.destroy === "function") {
         try { currentPdfDoc.destroy(); } catch (err) { console.warn(err); }
       }
       currentPdfDoc = null;
     }
 
-    function renderPdfDocument(uint8){
+    function renderPdfDocument(uint8) {
       if (!renderer) {
         return Promise.resolve();
       }
       resetViewer();
-      return ensurePdfJs().then(function(pdfjs){
-        return pdfjs.getDocument({ data: uint8 }).promise.then(function(doc){
+      return ensurePdfJs().then(function (pdfjs) {
+        return pdfjs.getDocument({ data: uint8 }).promise.then(function (doc) {
           destroyCurrentPdf();
           currentPdfDoc = doc;
           var totalPages = doc.numPages;
@@ -692,7 +1027,7 @@
 
           for (var pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
             renderTasks.push(
-              doc.getPage(pageNumber).then(function(page){
+              doc.getPage(pageNumber).then(function (page) {
                 var viewport = page.getViewport({ scale: 1.3 });
                 var wrapper = document.createElement("div");
                 wrapper.className = "pdf-page-render";
@@ -717,15 +1052,15 @@
                 var renderTask = page.render({ canvasContext: canvasContext, viewport: viewport });
 
                 var textDivs = [];
-                var textLayerTask = page.getTextContent().then(function(textContent){
+                var textLayerTask = page.getTextContent().then(function (textContent) {
                   return pdfjs.renderTextLayer({
                     textContent: textContent,
                     container: textLayer,
                     viewport: viewport,
                     textDivs: textDivs,
                     enhanceTextSelection: false
-                  }).promise.then(function(){
-                    textDivs.forEach(function(div){
+                  }).promise.then(function () {
+                    textDivs.forEach(function (div) {
                       div.dataset.rawText = div.textContent || "";
                     });
                     renderedPages[page.pageNumber - 1] = { textDivs: textDivs };
@@ -737,7 +1072,7 @@
             );
           }
 
-          return Promise.all(renderTasks).then(function(){
+          return Promise.all(renderTasks).then(function () {
             renderer.classList.add("is-visible");
             renderer.scrollTop = 0;
             container.classList.add("has-file");
@@ -754,19 +1089,19 @@
       });
     }
 
-    function ensurePdfJs(){
+    function ensurePdfJs() {
       if (window.pdfjsLib) {
         configurePdfWorker();
         return Promise.resolve(window.pdfjsLib);
       }
       if (!pdfLoaderPromise) {
-        pdfLoaderPromise = new Promise(function(resolve, reject){
+        pdfLoaderPromise = new Promise(function (resolve, reject) {
           var triedFallback = false;
-          function loadScript(src, workerSrc){
+          function loadScript(src, workerSrc) {
             var script = document.createElement("script");
             script.src = src;
             script.async = true;
-            script.onload = function(){
+            script.onload = function () {
               if (window.pdfjsLib) {
                 activeWorkerSrc = workerSrc;
                 configurePdfWorker();
@@ -778,7 +1113,7 @@
                 reject(new Error("No se pudo cargar el analizador de PDF. Revisa tu conexion."));
               }
             };
-            script.onerror = function(){
+            script.onerror = function () {
               if (!triedFallback && PDFJS_FALLBACK_SRC) {
                 triedFallback = true;
                 loadScript(PDFJS_FALLBACK_SRC, PDFJS_FALLBACK_WORKER_SRC);
@@ -790,33 +1125,33 @@
           }
           loadScript(PDFJS_SRC, PDFJS_WORKER_SRC);
         });
-        pdfLoaderPromise.catch(function(){
+        pdfLoaderPromise.catch(function () {
           pdfLoaderPromise = null;
         });
       }
       return pdfLoaderPromise;
     }
 
-    function configurePdfWorker(){
+    function configurePdfWorker() {
       if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
         window.pdfjsLib.GlobalWorkerOptions.workerSrc = activeWorkerSrc;
       }
     }
 
-    function readFileAsArrayBuffer(file){
-      return new Promise(function(resolve, reject){
+    function readFileAsArrayBuffer(file) {
+      return new Promise(function (resolve, reject) {
         var reader = new FileReader();
-        reader.onload = function(evt){
+        reader.onload = function (evt) {
           resolve(new Uint8Array(evt.target.result));
         };
-        reader.onerror = function(){
+        reader.onerror = function () {
           reject(new Error("No se pudo leer el archivo PDF."));
         };
         reader.readAsArrayBuffer(file);
       });
     }
 
-    function collectMatches(regexFactory, text, filter){
+    function collectMatches(regexFactory, text, filter) {
       var regex = regexFactory();
       var output = [];
       var seen = Object.create(null);
@@ -834,7 +1169,7 @@
       return output;
     }
 
-    function applyHighlights(findings, options){
+    function applyHighlights(findings, options) {
       latestFindings = findings && findings.length ? findings : null;
       if (!latestFindings) {
         activeRedactions = [];
@@ -844,9 +1179,9 @@
       }
       var terms = extractHighlightTerms(latestFindings);
       var redactionLookup = createRedactionLookup(activeRedactions);
-      renderedPages.forEach(function(page){
+      renderedPages.forEach(function (page) {
         if (!page || !page.textDivs) { return; }
-        page.textDivs.forEach(function(div){
+        page.textDivs.forEach(function (div) {
           var original = div.dataset && typeof div.dataset.rawText === "string" ? div.dataset.rawText : (div.textContent || "");
           if (!terms.length) {
             if (div.textContent !== original) {
@@ -864,15 +1199,15 @@
       });
     }
 
-    function extractHighlightTerms(findings){
+    function extractHighlightTerms(findings) {
       if (!findings || !findings.length) {
         return [];
       }
       var seen = Object.create(null);
       var terms = [];
-      findings.forEach(function(group){
+      findings.forEach(function (group) {
         if (!group || !group.entries) { return; }
-        group.entries.forEach(function(entry){
+        group.entries.forEach(function (entry) {
           var term = entry && entry.value ? entry.value.trim() : "";
           if (!term) { return; }
           var key = term.toLowerCase();
@@ -885,7 +1220,7 @@
       return terms;
     }
 
-    function buildHighlightedHtml(text, terms, redactionLookup){
+    function buildHighlightedHtml(text, terms, redactionLookup) {
       if (!terms.length) {
         return { html: escapeHtml(text), changed: false };
       }
@@ -928,7 +1263,7 @@
       return { html: pieces.join(""), changed: true };
     }
 
-    function createRedactionLookup(terms){
+    function createRedactionLookup(terms) {
       var lookup = Object.create(null);
       if (!terms || !terms.length) {
         return lookup;
@@ -942,17 +1277,17 @@
       return lookup;
     }
 
-    function normalizeTerm(value){
+    function normalizeTerm(value) {
       if (value === null || value === undefined) { return ""; }
       return String(value).trim().toLowerCase();
     }
 
-    function escapeRegExp(value){
+    function escapeRegExp(value) {
       return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
 
-    function escapeHtml(value){
-      return value.replace(/[&<>"']/g, function(ch){
+    function escapeHtml(value) {
+      return value.replace(/[&<>"']/g, function (ch) {
         switch (ch) {
           case "&": return "&amp;";
           case "<": return "&lt;";
