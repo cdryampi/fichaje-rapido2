@@ -198,19 +198,18 @@
 
   .pdf-redaction {
     display: inline-block;
-    background: #111827 !important;
+    background: rgba(255, 255, 255, 0.1) !important;
     color: transparent !important;
     position: relative;
     border-radius: 3px;
-    box-shadow: none !important
+    box-shadow: none !important;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    cursor: default
   }
 
   .pdf-redaction::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: rgba(15, 23, 42, .92);
-    border-radius: 3px
+    display: none
   }
 
   .file-picker {
