@@ -944,6 +944,17 @@ def _normalize_model_output(parsed: object) -> tuple[list[dict], list[dict]]:
         )
 
     if isinstance(parsed, dict):
+        # Fallback para cuando el modelo usa 'sensitive_data' en lugar de 'sensitive'
+        if "sensitive_data" in parsed:
+            for item in parsed.get("sensitive_data") or []:
+                if isinstance(item, dict):
+                    _push(sensitive, item)
+            # Si usa sensitive_data, probablemente no use non_sensitive normal, pero por si acaso
+            for item in parsed.get("non_sensitive") or []:
+                if isinstance(item, dict):
+                    _push(non_sensitive, item)
+            return sensitive, non_sensitive
+
         if "sensitive" in parsed or "non_sensitive" in parsed:
             for item in parsed.get("sensitive") or []:
                 if isinstance(item, dict):
