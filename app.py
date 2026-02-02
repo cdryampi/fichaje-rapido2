@@ -1124,26 +1124,21 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
             "chunk_info": chunk_info,
         }
         user_prompt = json.dumps(payload, ensure_ascii=False)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        
         request_kwargs = {
             "model": model,
-            "input": [
-                {
-                    "role": "system",
-                    "content": [{"type": "input_text", "text": system_prompt}],
-                },
-                {
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": user_prompt}],
-                },
-            ],
+            "messages": messages,
             "temperature": 0,
-            "max_output_tokens": max_tokens,
+            "max_tokens": max_tokens,
         }
         if supports_response_format:
             request_kwargs["response_format"] = response_format
         
         # Trace info for this call
-        # Optimizamos lo que guardamos en debug para no saturar con el texto completo repetido
         debug_payload = payload.copy()
         if len(debug_payload.get("document_excerpt", "")) > 200:
              debug_payload["document_excerpt"] = debug_payload["document_excerpt"][:200] + "... [TRUNCATED FOR LOG]"
@@ -1157,51 +1152,41 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
             "error": None
         }
 
+        content = None
+        truncated = False
+        
         try:
-            response = client.responses.create(**request_kwargs)
+            # CORRECT STANDARD CALL
+            response = client.chat.completions.create(**request_kwargs)
+            choice = response.choices[0]
+            content = choice.message.content
+            if choice.finish_reason == "length":
+                truncated = True
         except TypeError as exc:
+            # Fallback for older library versions that don't support response_format
             if supports_response_format and "response_format" in str(exc):
                 supports_response_format = False
                 request_kwargs.pop("response_format", None)
-                response = client.responses.create(**request_kwargs)
+                # Retry without response_format
+                response = client.chat.completions.create(**request_kwargs)
+                choice = response.choices[0]
+                content = choice.message.content
+                if choice.finish_reason == "length":
+                    truncated = True
             else:
                 trace_entry["error"] = str(exc)
                 debug_traces.append(trace_entry)
                 raise
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             trace_entry["error"] = str(exc)
             debug_traces.append(trace_entry)
             raise RuntimeError(f"Fallo al invocar al modelo {model}: {exc}") from exc
 
-        try:
-            content = getattr(response, "output_text", None)
-            truncated = False
-            chunks_text = []
-            for item in getattr(response, "output", []) or []:
-                if getattr(item, "finish_reason", None) == "length":
-                    truncated = True
-                for piece in getattr(item, "content", []) or []:
-                    if getattr(piece, "type", None) == "output_text":
-                        chunks_text.append(getattr(piece, "text", ""))
-            if not content:
-                content = "".join(chunks_text).strip()
-            
-            trace_entry["output_raw"] = content
-
-            if not content:
-                raise ValueError("empty content")
-            if not truncated:
-                usage = getattr(response, "usage", None)
-                output_tokens = getattr(usage, "output_tokens", None) if usage else None
-                if output_tokens and output_tokens >= max_tokens:
-                    truncated = True
-        except Exception as exc:  # pragma: no cover
-            trace_entry["error"] = f"Error leyendo respuesta: {exc}"
-            debug_traces.append(trace_entry)
-            raise RuntimeError("La respuesta del modelo no fue legible.") from exc
-
-        # Guardamos la traza correcta antes de parsear
+        trace_entry["output_raw"] = content
         debug_traces.append(trace_entry)
+
+        if not content:
+             raise ValueError("empty content")
 
         try:
             parsed = _parse_model_json(content)
