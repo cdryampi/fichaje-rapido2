@@ -1034,7 +1034,11 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         "Ante la duda, SIEMPRE clasifícalo como sensible (sensitive). "
         "Incluye: Nombres, Emails, Teléfonos, Direcciones, DNI/NIE, cuentas bancarias, fechas de nacimiento, etc. "
         "No descartes un dato solo porque falte contexto explícito; si parece un dato personal, márcalo. "
-        "Devuelve un JSON válido estrictamente con el esquema solicitado."
+        "Responde EXCLUSIVAMENTE con un único objeto JSON que cumpla el siguiente esquema:\n"
+        "{\n"
+        '  "sensitive": [{"label": "...", "value": "...", "reason": "...", "confidence": "..."}],\n'
+        '  "non_sensitive": []\n'
+        "}"
     )
     response_format = {
         "type": "json_schema",
