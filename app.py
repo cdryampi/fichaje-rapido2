@@ -1000,9 +1000,9 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         max_tokens = 1500
     max_tokens = max(300, min(max_tokens, 10_000))
     try:
-        chunk_size = int(os.environ.get("PDF_AI_CANDIDATES_PER_CALL", "20"))
+        chunk_size = int(os.environ.get("PDF_AI_CANDIDATES_PER_CALL", "50"))
     except ValueError:
-        chunk_size = 20
+        chunk_size = 50
     chunk_size = max(1, min(chunk_size, 60))
 
     try:
@@ -1143,11 +1143,16 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
             request_kwargs["response_format"] = response_format
         
         # Trace info for this call
+        # Optimizamos lo que guardamos en debug para no saturar con el texto completo repetido
+        debug_payload = payload.copy()
+        if len(debug_payload.get("document_excerpt", "")) > 200:
+             debug_payload["document_excerpt"] = debug_payload["document_excerpt"][:200] + "... [TRUNCATED FOR LOG]"
+        
         trace_entry = {
             "timestamp": datetime.now().isoformat(),
             "model": model,
             "input_system": system_prompt,
-            "input_user": user_prompt,
+            "input_user": json.dumps(debug_payload, ensure_ascii=False),
             "output_raw": None,
             "error": None
         }
