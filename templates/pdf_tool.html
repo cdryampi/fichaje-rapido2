@@ -533,6 +533,9 @@
         });
     });
 
+    // Se usa para almacenar el blob de previsualización (censurado)
+    var currentRedactedBlobUrl = null;
+
     obfuscateButton.addEventListener("click", function () {
       if (!latestFindings || !latestFindings.length) {
         alert("Detecta los datos sensibles antes de emborronarlos.");
@@ -540,32 +543,61 @@
       }
       var selectedValues = getSelectedValues();
       obfuscateButton.blur();
-      // En modo nativo NO hacemos highlighting visual (applyHighlights)
-      // applyHighlights(latestFindings, { redactionTerms: selectedValues });
 
-      var baseMessage = "Se ocultaron " + selectedValues.length + " datos sensibles.";
-      if (detectionSummary) {
-        var baseMessage = (detectionSummary.dataset && detectionSummary.dataset.baseMessage) ? detectionSummary.dataset.baseMessage : detectionSummary.textContent;
-        if (detectionSummary.dataset) {
-          detectionSummary.dataset.baseMessage = baseMessage;
-        }
-        if (baseMessage) {
-          var suffix = selectedValues.length
-            ? "Se emborronaron " + selectedValues.length + " coincidencia(s) seleccionada(s)."
-            : "No se seleccionaron coincidencias para emborronar.";
-          detectionSummary.textContent = baseMessage + " · " + suffix;
-        }
+      // GENERAR PREVIEW
+      if (!currentPdfBytes) {
+        alert("No hay PDF cargado.");
+        return;
       }
-      var saveButton = document.getElementById("save-redacted-button");
-      if (saveButton) {
-        saveButton.disabled = !selectedValues.length;
-      }
+
+      detectionSummary.textContent = "Generando previsualización censurada...";
+
+      generateRedactedPdfBytes(currentPdfBytes, latestFindings, selectedValues)
+        .then(function (redactedBytes) {
+          if (!redactedBytes) return; // Error handled inside
+
+          // Actualizar el visor nativo con el nuevo PDF
+          var blob = new Blob([redactedBytes], { type: 'application/pdf' });
+          if (currentRedactedBlobUrl) {
+            window.URL.revokeObjectURL(currentRedactedBlobUrl);
+          }
+          currentRedactedBlobUrl = window.URL.createObjectURL(blob);
+
+          if (nativeViewer) {
+            nativeViewer.data = currentRedactedBlobUrl;
+          }
+
+          var baseMessage = "Se ocultaron " + selectedValues.length + " datos sensibles. Previsualización actualizada.";
+          if (detectionSummary) {
+            detectionSummary.textContent = baseMessage;
+            detectionSummary.dataset.baseMessage = baseMessage;
+          }
+
+          // Habilitar guardar
+          var saveButton = document.getElementById("save-redacted-button");
+          if (saveButton) {
+            saveButton.disabled = false;
+          }
+        });
     });
 
     var saveButton = document.getElementById("save-redacted-button");
     if (saveButton) {
       saveButton.addEventListener("click", function () {
         var selectedValues = getSelectedValues();
+        // Si ya tenemos una URL de blob generada (porque pulsó emborronar), la usamos para descargar directamente
+        if (currentRedactedBlobUrl) {
+          // Crear link de descarga desde el blob existente
+          var a = document.createElement("a");
+          a.style.display = "none";
+          a.href = currentRedactedBlobUrl;
+          a.download = "documento_censurado.pdf";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          return;
+        }
+
         if (!selectedValues.length) {
           alert("Primero debes emborronar algo para poder guardar.");
           return;
@@ -574,28 +606,28 @@
           alert("No hay PDF cargado.");
           return;
         }
-        generateRedactedPdf(currentPdfBytes, latestFindings, selectedValues);
+        // Si no dio a emborronar antes, generamos y descargamos
+        generateRedactedPdfBytes(currentPdfBytes, latestFindings, selectedValues)
+          .then(function (bytes) {
+            if (bytes) downloadBlob(bytes, "documento_censurado.pdf", "application/pdf");
+          });
       });
     }
 
-    async function generateRedactedPdf(pdfBytes, findings, redactionTerms) {
+    async function generateRedactedPdfBytes(pdfBytes, findings, redactionTerms) {
       if (!window.PDFLib) {
         alert("La librería PDF-Lib no se ha cargado correctamente.");
-        return;
+        return null;
       }
 
       // DEBUG: Verificar entrada
       try {
-        console.log("Generating Redacted PDF...");
-        console.log("Type:", pdfBytes ? pdfBytes.constructor.name : "null");
-        console.log("Length:", pdfBytes ? pdfBytes.length : 0);
         if (pdfBytes && pdfBytes.length > 4) {
           var header = String.fromCharCode(pdfBytes[0], pdfBytes[1], pdfBytes[2], pdfBytes[3]);
-          console.log("Header:", header);
           if (header !== "%PDF") {
             console.error("Invalid PDF Header:", header);
-            alert("El archivo en memoria no parece ser un PDF válido (Header incorrecto). Intenta recargar la página.");
-            return;
+            alert("El archivo en memoria no parece ser un PDF válido. Intenta recargar.");
+            return null;
           }
         }
       } catch (e) {
@@ -610,7 +642,7 @@
 
         if (!currentPdfDoc) {
           alert("Error interno: documento PDF.js no disponible.");
-          return;
+          return null;
         }
 
         for (var pgIdx = 0; pgIdx < pages.length; pgIdx++) {
@@ -649,11 +681,12 @@
         }
 
         var pdfBytesModified = await pdfDoc.save();
-        downloadBlob(pdfBytesModified, "documento_censurado.pdf", "application/pdf");
+        return pdfBytesModified;
 
       } catch (e) {
         console.error(e);
         alert("Error generando PDF censurado: " + e.message);
+        return null;
       }
     }
 
