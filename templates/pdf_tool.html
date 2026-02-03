@@ -1020,6 +1020,14 @@
             // Minimo longitud de CCC (20) o IBAN con ES (22)
             return clean.length >= 20;
           }
+        },
+        {
+          label: "Nombres de Bancos",
+          regex: function () { return /\b(?:Banco|Banc|Caixa|Caja|ING|BBVA|Santander|Sabadell|Kutxabank|Bankinter|Openbank|N26|Revolut)\s?[\w\.]*\b/gi; }
+        },
+        {
+          label: "Datos Sociales",
+          regex: function () { return /\b(?:Tarifa|Bono)\s(?:Social|Vulnerable)\b|\bVulnerabilidad\b/gi; }
         }
       ];
 
