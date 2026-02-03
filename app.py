@@ -1274,6 +1274,70 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         "debug": debug_traces,
     }
 
+@app.route("/api/pdf/redact", methods=["POST"])
+@login_required
+def api_pdf_redact():
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        return jsonify({"ok": False, "error": "Librería de redacción segura (PyMuPDF) no instalada en el servidor."}), 501
+
+    if 'file' not in request.files:
+         return jsonify({"ok": False, "error": "No se recibió archivo PDF."}), 400
+    
+    file = request.files['file']
+    redactions_json = request.form.get('redactions', '[]')
+    try:
+        redactions = json.loads(redactions_json)
+    except:
+        redactions = []
+
+    if not file or file.filename == '':
+        return jsonify({"ok": False, "error": "Archivo vacío."}), 400
+
+    try:
+        # Procesar en memoria
+        pdf_bytes = file.read()
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        
+        for r in redactions:
+            page_num = int(r.get('page', 1)) - 1 # 1-based a 0-based
+            if page_num < 0 or page_num >= doc.page_count:
+                continue
+                
+            page = doc[page_num]
+            # Coordenadas: [x, y, width, height] -> rect [x, y, x+w, y+h]
+            # Nota: fitz usa coordenadas bottom-left? No, top-left standard.
+            # pdf.js da [x, y, w, h] con y invertida a veces?
+            # Asumimos que frontend manda: x, y, width, height en sistema PDF standard.
+            
+            x, y, w, h = r.get('x', 0), r.get('y', 0), r.get('width', 0), r.get('height', 0)
+            rect = fitz.Rect(x, y, x + w, y + h)
+            
+            # Añadir anotación de redacción
+            page.add_redact_annot(rect, fill=(0, 0, 0)) # Relleno negro
+            
+        # Aplicar redacciones (elimina text/imagenes e impacta las anotaciones)
+        for page in doc:
+            page.apply_redactions()
+            
+        output_bytes = doc.tobytes()
+        doc.close()
+        
+        # Devolver archivo
+        from io import BytesIO
+        from flask import send_file
+        return send_file(
+            BytesIO(output_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name='documento_censurado_seguro.pdf'
+        )
+
+    except Exception as e:
+        app.logger.error(f"Error redacting PDF: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 
 @app.route("/api/pdf/analyze", methods=["POST"])
 @login_required

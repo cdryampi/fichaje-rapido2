@@ -622,18 +622,6 @@
     if (saveButton) {
       saveButton.addEventListener("click", function () {
         var selectedValues = getSelectedValues();
-        // Si ya tenemos una URL de blob generada (porque pulsó emborronar), la usamos para descargar directamente
-        if (currentRedactedBlobUrl) {
-          // Crear link de descarga desde el blob existente
-          var a = document.createElement("a");
-          a.style.display = "none";
-          a.href = currentRedactedBlobUrl;
-          a.download = "documento_censurado.pdf";
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          return;
-        }
 
         if (!selectedValues.length) {
           alert("Primero debes emborronar algo para poder guardar.");
@@ -643,12 +631,123 @@
           alert("No hay PDF cargado.");
           return;
         }
-        // Si no dio a emborronar antes, generamos y descargamos
-        generateRedactedPdfBytes(currentPdfBytes, latestFindings, selectedValues)
-          .then(function (bytes) {
-            if (bytes) downloadBlob(bytes, "documento_censurado.pdf", "application/pdf");
+
+        // Deshabilitar botón durante proceso
+        saveButton.disabled = true;
+        var originalText = saveButton.innerHTML;
+        saveButton.innerHTML = 'Procesando...';
+
+        calculateRedactionCoordinates(currentPdfBytes, selectedValues)
+          .then(function (redactions) {
+            if (!redactions || !redactions.length) {
+              alert("No se encontraron coincidencias para los términos seleccionados.");
+              saveButton.disabled = false;
+              saveButton.innerHTML = originalText;
+              return;
+            }
+
+            var formData = new FormData();
+            var blob = new Blob([currentPdfBytes], { type: "application/pdf" });
+            formData.append("file", blob, "original.pdf");
+            formData.append("redactions", JSON.stringify(redactions));
+
+            var csrf = getCsrfToken();
+
+            fetch("/api/pdf/redact", {
+              method: "POST",
+              headers: { "X-CSRFToken": csrf },
+              body: formData
+            })
+              .then(function (res) {
+                if (res.status === 501) {
+                  throw new Error("El servidor no tiene instalada la librería de seguridad (PyMuPDF). Instala 'pymupdf' con pip.");
+                }
+                if (!res.ok) {
+                  return res.json().then(function (d) { throw new Error(d.error || "Error en servidor"); });
+                }
+                return res.blob();
+              })
+              .then(function (blob) {
+                downloadBlob(blob, "documento_censurado_seguro.pdf", "application/pdf");
+              })
+              .catch(function (err) {
+                console.error(err);
+                alert("Error guardando PDF: " + err.message);
+              })
+              .finally(function () {
+                saveButton.disabled = false;
+                saveButton.innerHTML = originalText;
+              });
           });
       });
+    }
+
+    async function calculateRedactionCoordinates(pdfBytes, redactionTerms) {
+      if (!window.PDFLib) return [];
+
+      try {
+        var pdfCopy = new Uint8Array(pdfBytes);
+        var pdfDoc = await PDFLib.PDFDocument.load(pdfCopy, { ignoreEncryption: true });
+        var pages = pdfDoc.getPages();
+        var redactedRects = [];
+
+        if (!currentPdfDoc) return [];
+
+        for (var pgIdx = 0; pgIdx < pages.length; pgIdx++) {
+          var pdfJsPage = await currentPdfDoc.getPage(pgIdx + 1);
+          var textContent = await pdfJsPage.getTextContent();
+
+          for (var item of textContent.items) {
+            var text = item.str;
+            if (!text) continue;
+            var shouldRedact = false;
+            for (var term of redactionTerms) {
+              if (normalizeTerm(text).includes(normalizeTerm(term))) {
+                shouldRedact = true;
+                break;
+              }
+            }
+            if (shouldRedact) {
+              // PDF Layout:
+              // item.transform -> [scaleX, skewY, skewX, scaleY, tx, ty]
+              // Width/Height logic similar to pdf_tool logic
+              var tx = item.transform[4];
+              var ty = item.transform[5];
+              var itemWidth = item.width || 0;
+              var fontSize = Math.sqrt(item.transform[0] * item.transform[0] + item.transform[1] * item.transform[1]);
+
+              // Backend (PyMuPDF) expects: page (1-based), x, y, width, height.
+              // Coordinate system: PDF standard (bottom-left origin usually, but fitz handles internal?)
+              // PyMuPDF fitz.Rect(x0, y0, x1, y1).
+              // Actually PDF uses bottom-up Y, but pdf.js and fitz text extraction often normalize.
+              // However, drawing rectangles in PyMuPDF (add_redact_annot) works with Top-Left origin usually if using normal coordinates?
+              // Wait, typical PDF is bottom-left origin.
+              // Let's pass the raw PDF coordinates we get from pdf.js.
+              // pdf.js text items are in PDF user space.
+              // PyMuPDF expects rect in PDF user space.
+              // One catch: item.transform[5] (ty) is the baseline. We need the "top" of the text box?
+              // Or bottom?
+              // The regex box drawing in generateRedactedPdfBytes used (tx, ty, width, height).
+              // Let's verify how it was doing it:
+              // page.drawRectangle({ x: tx, y: ty, ... }) -> pdf-lib uses bottom-left origin.
+              // So tx, ty is the bottom-left corner of the text?
+              // Ideally yes.
+
+              redactedRects.push({
+                page: pgIdx + 1,
+                x: tx,
+                y: ty,
+                width: itemWidth,
+                height: fontSize
+              });
+            }
+          }
+        }
+        return redactedRects;
+      } catch (e) {
+        console.error("Error calc coords", e);
+        return [];
+      }
     }
 
     async function generateRedactedPdfBytes(pdfBytes, findings, redactionTerms) {
