@@ -40,6 +40,15 @@
       <div class="detection-panel" data-detection-output>
         <h4>Resultados del analisis</h4>
         <p class="muted small" data-detection-summary>No se ha analizado ningun PDF todavia.</p>
+
+        <!-- Filters -->
+        <div class="filter-controls is-hidden" id="confidence-filters" style="margin-bottom: 8px;">
+          <span style="font-size: 11px; margin-right: 4px; color: #94a3b8;">Filtrar por confianza:</span>
+          <button type="button" class="btn-xs btn-active" data-filter="all">Todas</button>
+          <button type="button" class="btn-xs" data-filter="high">Alta</button>
+          <button type="button" class="btn-xs" data-filter="medium">Media+</button>
+        </div>
+
         <div class="detection-controls is-hidden" data-select-all-container>
           <label class="detection-checkbox-label">
             <input type="checkbox" id="sensitive-select-all" />
@@ -289,15 +298,43 @@
 
   .detection-tag {
     display: inline-block;
-    margin-right: 8px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: #ffe7c2;
-    color: #8a6d3b;
-    font-size: 12px;
+    padding: 3px 8px;
+    font-size: 11px;
     font-weight: 700;
-    text-transform: uppercase
+    text-transform: uppercase;
+    background: #475569;
+    color: #f8fafc;
+    border-radius: 4px;
+    margin-right: 6px
   }
+
+  /* Filters */
+  .filter-controls.is-hidden {
+    display: none;
+  }
+
+  .btn-xs {
+    padding: 2px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+    border: 1px solid #475569;
+    background: transparent;
+    color: #cbd5e1;
+    cursor: pointer;
+    margin-right: 4px;
+  }
+
+  .btn-xs:hover {
+    background: #334155;
+  }
+
+  .btn-xs.btn-active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+  }
+
+
 
   .detection-empty {
     color: #cbd5f5;
@@ -875,6 +912,15 @@
         {
           label: "Codigos postales",
           regex: function () { return /\b\d{5}\b/g; }
+        },
+        {
+          label: "Cuentas Bancarias / IBAN",
+          regex: function () { return /\b([a-zA-Z]{2}\d{2}\s?)(\d{4}\s?){4,6}\b|\b\d{4}\s?\d{4}\s?\d{2}\s?\d{10}\b/g; },
+          filter: function (value) {
+            var clean = value.replace(/[\s-]/g, "");
+            // Minimo longitud de CCC (20) o IBAN con ES (22)
+            return clean.length >= 20;
+          }
         }
       ];
 
@@ -911,6 +957,31 @@
       });
     }
 
+    // Filter State
+    var currentFilter = 'all'; // all, high, medium
+
+    function setupFilterListeners() {
+      var buttons = document.querySelectorAll('#confidence-filters button');
+      buttons.forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          // Update Active State
+          buttons.forEach(function (b) { b.classList.remove('btn-active'); });
+          e.target.classList.add('btn-active');
+
+          // Update Filter
+          currentFilter = e.target.dataset.filter || 'all';
+
+          // Re-render
+          if (latestFindings) {
+            renderResultsList(latestFindings, detectionList, { showReason: true, withSelection: true });
+            updateSelectAllUi();
+          }
+        });
+      });
+    }
+    // Initialize
+    setupFilterListeners();
+
     function renderResultsList(groups, listEl, options) {
       if (!groups || !groups.length) {
         listEl.innerHTML = '<li class="detection-empty">Sin coincidencias.</li>';
@@ -919,9 +990,25 @@
       var maxPerLabel = options && options.maxPerLabel ? options.maxPerLabel : 10;
       var showReason = !!(options && options.showReason);
       var withSelection = options && Object.prototype.hasOwnProperty.call(options, "withSelection") ? !!options.withSelection : true;
+
       var html = groups.map(function (group) {
         var safeLabel = escapeHtml(group.label || "");
-        var entries = group.entries ? group.entries.slice(0, maxPerLabel) : [];
+
+        // Filter logic
+        var entries = group.entries || [];
+        if (currentFilter !== 'all') {
+          entries = entries.filter(function (e) {
+            var conf = (e.confidence || "low").toLowerCase();
+            if (currentFilter === 'high') return conf === 'high';
+            if (currentFilter === 'medium') return conf === 'high' || conf === 'medium';
+            return true;
+          });
+        }
+
+        if (!entries.length) return ""; // Skip empty groups
+
+        entries = entries.slice(0, maxPerLabel);
+
         var valuesHtml = entries.map(function (entry) {
           var details = [];
           if (showReason && entry.reason) {
@@ -936,6 +1023,8 @@
             var key = buildEntryKey(group.label || "", valueText);
             var entryState = selectionState[key];
             var isChecked = entryState ? !!entryState.selected : false;
+            // Si el elemento está oculto por filtro, no deberíamos renderizarlo, pero aquí ya hemos filtrado 'entries'.
+            // Sin embargo, hay que asegurar que la selección se mantiene coherente.
             var checkedAttr = isChecked ? " checked" : "";
             return '<label class="detection-option"><input type="checkbox" class="detection-checkbox" data-entry-key="' + escapeHtml(key) + '"' + checkedAttr + ' /><span>' + escapeHtml(valueText) + detailHtml + '</span></label>';
           }
@@ -943,7 +1032,12 @@
         }).join("");
         return '<li><div class="detection-item"><span class="detection-tag">' + safeLabel + '</span><div class="detection-values">' + valuesHtml + '</div></div></li>';
       }).join("");
-      listEl.innerHTML = html;
+
+      if (!html) {
+        listEl.innerHTML = '<li class="detection-empty">No hay resultados con este filtro.</li>';
+      } else {
+        listEl.innerHTML = html;
+      }
     }
 
     function prepareSelectionState(groups) {

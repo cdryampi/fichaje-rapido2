@@ -1032,11 +1032,14 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         "Analiza los siguientes candidatos extraídos de un documento PDF. "
         "Tu objetivo es identificar CUALQUIER dato que PUEDA ser sensible o personal. "
         "Ante la duda, SIEMPRE clasifícalo como sensible (sensitive). "
-        "Incluye: Nombres, Emails, Teléfonos, Direcciones, DNI/NIE, cuentas bancarias, fechas de nacimiento, etc. "
-        "No descartes un dato solo porque falte contexto explícito; si parece un dato personal, márcalo. "
+        "REGLAS ESPECÍFICAS:\n"
+        "1. Cuentas Bancarias: Fíjate especialmente en secuencias numéricas que parezcan códigos de banco (ej: 1465 ING) o fragmentos de IBAN/CCC. Márcalos siempre, aunque estén incompletos.\n"
+        "2. Direcciones: No descartes direcciones duplicadas. Si aparecen en distintos párrafos, márcalas todas.\n"
+        "3. Fechas: Si una fecha es genérica (ej: fecha de hoy, año actual) márcala con confidence 'medium' o 'low'. Si es fecha de nacimiento, 'high'.\n"
+        "4. Incluye: Nombres, Emails, Teléfonos, Direcciones, DNI/NIE, cuentas bancarias, fechas de nacimiento, etc.\n"
         "Responde EXCLUSIVAMENTE con un único objeto JSON que cumpla el siguiente esquema:\n"
         "{\n"
-        '  "sensitive": [{"label": "...", "value": "...", "reason": "...", "confidence": "..."}],\n'
+        '  "sensitive": [{"label": "...", "value": "...", "reason": "...", "confidence": "high|medium|low"}],\n'
         '  "non_sensitive": []\n'
         "}"
     )
