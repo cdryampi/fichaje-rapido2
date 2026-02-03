@@ -1027,17 +1027,15 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
     excerpt_cache: dict[int, str] = {}
 
     # Prompt relajado para mejorar recall
-    system_prompt = (
-        "Eres un experto en protección de datos y privacidad. "
-        "Analiza los siguientes candidatos extraídos de un documento PDF. "
-        "Tu objetivo es identificar CUALQUIER dato que PUEDA ser sensible o personal. "
-        "Ante la duda, SIEMPRE clasifícalo como sensible (sensitive). "
-        "REGLAS ESPECÍFICAS:\n"
-        "1. Cuentas Bancarias: Fíjate especialmente en secuencias numéricas que parezcan códigos de banco (ej: 1465 ING), fragmentos de IBAN/CCC, Y NOMBRES DE BANCOS (ej: ING, BBVA, Caixa). Son datos sensibles.\n"
-        "2. Datos Sociales: Busca términos como 'Tarifa Social', 'Bono Social', 'Vunerable/Vulnerabilidad'. Son EXTREMADAMENTE sensibles.\n"
-        "3. Direcciones: SI UNA DIRECCIÓN (o fragmento como calle/ciudad) APARECE MÚLTIPLES VECES, MÁRCALAS TODAS. Incluye variantes cortas y largas.\n"
-        "4. Fechas: Si una fecha es genérica (ej: fecha de hoy) 'medium'. Si es nacimiento o personal, 'high'.\n"
-        "5. Códigos Postales: Son datos personales si están asociados a un domicilio. Mantenlos como sensitive.\n"
+        "REGLAS ESPECÍFICAS (EXTREMADAMENTE IMPORTANTES):\n"
+        "1. Cuentas Bancarias: Detecta CUALQUIER secuencia que parezca cuenta (ej: 1465..., IBAN, CCC) Y NOMBRES DE BANCOS (ING, BBVA...). Son datos financieros PROTEGIDOS.\n"
+        "2. Datos Sociales/Vulnerabilidad: 'Bono Social', 'Tarifa Social', 'Vulnerable', 'Renta Mínima'. Indican situación económica crítica. CLASIFICAR COMO HIGH.\n"
+        "3. Salud y Discapacidad: 'Grado de discapacidad', 'Minusvalía', 'Baja médica', 'Incapacidad'. Datos de SALUD son ESPECIALMENTE PROTEGIDOS.\n"
+        "4. Censo/Convivencia: '5 habitantes', 'personas empadronadas', 'familia numerosa'. Revelan composición del hogar. SENSIBLE.\n"
+        "5. Legal/Deudas: 'Embargo', 'Apremio', 'Ejecución Fiscal', 'Juzgado'. Datos judiciales sensibles.\n"
+        "6. Ideología/Sindicatos: 'Cuota Sindical', 'Afiliación', 'Partido'. SENSIBILIDAD MÁXIMA.\n"
+        "7. Direcciones/Duplicados: SI UNA DIRECCIÓN APARECE VARIAS VECES, MÁRCALAS TODAS. No dejes ninguna sin censurar.\n"
+        "8. Códigos Postales: Asociados a domicilio -> SENSIBLE.\n"
         "Responde EXCLUSIVAMENTE con un único objeto JSON que cumpla el siguiente esquema:\n"
         "{\n"
         '  "sensitive": [{"label": "...", "value": "...", "reason": "...", "confidence": "high|medium|low"}],\n'

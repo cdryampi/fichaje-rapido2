@@ -1034,8 +1034,20 @@
           regex: function () { return /\b(?:Banco|Banc|Caixa|Caja|ING|BBVA|Santander|Sabadell|Kutxabank|Bankinter|Openbank|N26|Revolut)\s?[\w\.]*\b/gi; }
         },
         {
-          label: "Datos Sociales",
-          regex: function () { return /\b(?:Tarifa|Bono)\s(?:Social|Vulnerable)\b|\bVulnerabilidad\b/gi; }
+          label: "Datos Sociales/Vulnerabilidad",
+          regex: function () { return /\b(?:Tarifa|Bono)\s(?:Social|Vulnerable)\b|\bVulnerabilidad\b|\bRenta\s(?:Garantizada|M[íi]nima)\b|\bIngreso\sM[íi]nimo\b/gi; }
+        },
+        {
+          label: "Salud/Discapacidad",
+          regex: function () { return /\b(?:Discapacidad|Minusval[íi]a|Incapacidad|Grado\sde|Baja\sMX|Baja\sm[ée]dica)\b/gi; }
+        },
+        {
+          label: "Legal/Deudas",
+          regex: function () { return /\b(?:Embargo|Ejecuci[óo]n|Apremio|Sentencia|Juzgado|Deuda|Impago)\b/gi; }
+        },
+        {
+          label: "Sindicatos/Ideología",
+          regex: function () { return /\b(?:Cuota|Afiliaci[óo]n)\s(?:Sindical|Partido)\b|\bSindicato\b|\bPartido\sPol[íi]tico\b/gi; }
         }
       ];
 
