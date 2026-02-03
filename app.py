@@ -1312,7 +1312,27 @@ def api_pdf_redact():
             # Asumimos que frontend manda: x, y, width, height en sistema PDF standard.
             
             x, y, w, h = r.get('x', 0), r.get('y', 0), r.get('width', 0), r.get('height', 0)
-            rect = fitz.Rect(x, y, x + w, y + h)
+            
+            # PDF (frontend/pdf.js) uses Bottom-Left origin.
+            # PyMuPDF uses Top-Left origin.
+            # We must flip the Y coordinate.
+            # pdf.js 'y' is the baseline/bottom of text component.
+            # So the box goes from y to y+h in PDF space.
+            # In PyMuPDF:
+            # Top Y = page.rect.height - (y + h)
+            # Bottom Y = page.rect.height - y
+            
+            page_h = page.rect.height
+            # Invert Y
+            ry0 = page_h - (y + h)
+            ry1 = page_h - y
+            
+            # Adjust slightly for baseline descent if needed, but strict box is safer.
+            # Ensure ry0 < ry1
+            if ry0 > ry1:
+                ry0, ry1 = ry1, ry0
+                
+            rect = fitz.Rect(x, ry0, x + w, ry1)
             
             # Añadir anotación de redacción
             page.add_redact_annot(rect, fill=(0, 0, 0)) # Relleno negro
