@@ -700,13 +700,7 @@
           for (var item of textContent.items) {
             var text = item.str;
             if (!text) continue;
-            var shouldRedact = false;
-            for (var term of redactionTerms) {
-              if (normalizeTerm(text).includes(normalizeTerm(term))) {
-                shouldRedact = true;
-                break;
-              }
-            }
+            var shouldRedact = shouldRedactItem(text, redactionTerms);
             if (shouldRedact) {
               // PDF Layout:
               // item.transform -> [scaleX, skewY, skewX, scaleY, tx, ty]
@@ -790,14 +784,7 @@
             var text = item.str;
             if (!text) continue;
 
-            var shouldRedact = false;
-            for (var term of redactionTerms) {
-              if (normalizeTerm(text).includes(normalizeTerm(term))) {
-                shouldRedact = true;
-                break;
-              }
-            }
-
+            var shouldRedact = shouldRedactItem(text, redactionTerms);
             if (shouldRedact) {
               var tx = item.transform[4];
               var ty = item.transform[5];
@@ -990,6 +977,11 @@
           label: "Telefonos",
           regex: function () { return /\b(?:\+?\d{2,3}[\s.-]?)?(?:\d[\s.-]?){9,12}\b/g; },
           filter: function (value) {
+            // Fix: Filter out dates (e.g. 08/03/1980 matches digits logic)
+            if (value.includes("/") || (value.includes("-") && value.length <= 10)) {
+              // Check if looks like date
+              if (/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/.test(value)) return false;
+            }
             return value.replace(/\D/g, "").length >= 9;
           }
         },
@@ -1058,7 +1050,7 @@
         },
         {
           label: "Datos Sociales/Vulnerabilidad",
-          regex: function () { return /\b(?:Tarifa|Bono)\s(?:Social|Vulnerable)\b|\bVulnerabilidad\b|\bRenta\s(?:Garantizada|M[íi]nima)\b|\bIngreso\sM[íi]nimo\b/gi; }
+          regex: function () { return /\b(?:Tarifa|Bono|Canon)\s(?:Social|Vulnerable|Saneamiento)\b|\bVulnerabilidad\b|\bRenta\s(?:Garantizada|M[íi]nima)\b|\bIngreso\sM[íi]nimo\b/gi; }
         },
         {
           label: "Legal/Deudas",
@@ -1212,7 +1204,58 @@
       }
     }
 
+
+    // Fix: Add missing showDebugInfo function
+    function showDebugInfo(debugData) {
+      var section = document.getElementById("debug-section");
+      var content = document.getElementById("debug-content");
+      if (!section || !content) return;
+
+      if (!debugData) {
+        section.classList.add("is-hidden");
+        content.textContent = "";
+        return;
+      }
+
+      section.classList.remove("is-hidden");
+      try {
+        content.textContent = JSON.stringify(debugData, null, 2);
+      } catch (e) {
+        content.textContent = "Error parsing debug data: " + e.message;
+      }
+    }
+
+    // Helper for robust redaction matching
+    function shouldRedactItem(text, redactionTerms) {
+      var normText = normalizeTerm(text);
+      if (!normText || normText.length < 2) return false; // Ignore artifacts
+
+      for (var i = 0; i < redactionTerms.length; i++) {
+        var term = redactionTerms[i];
+        var normTerm = normalizeTerm(term);
+        if (!normTerm) continue;
+
+        // 1. Exact match (normalized)
+        if (normText === normTerm) return true;
+
+        // 2. Text contains Term (e.g. "Name: John Doe" contains "John Doe")
+        if (normText.includes(normTerm)) return true;
+
+        // 3. Term contains Text (e.g. "John Doe" contains "John") -> Only if text is significant
+        if (normTerm.includes(normText)) {
+          // Heuristic: Text must be a strictly significant part (e.g. > 3 chars or digit-heavy)
+          if (normText.length > 3) return true;
+          if (/\d/.test(normText) && normText.length >= 2) return true;
+        }
+      }
+      return false;
+    }
+
     function toggleGroupSelection(groupLabel, isSelected) {
+      // Fix: Use global document selector since listEl reference is lost in closure
+      var listEl = document.getElementById("detection-list");
+      if (!listEl) return;
+
       var groupCheckboxes = listEl.querySelectorAll('.detection-checkbox[data-group-label="' + groupLabel.replace(/"/g, '\\"') + '"]');
       groupCheckboxes.forEach(function (cb) {
         if (cb.checked !== isSelected) {
@@ -1225,6 +1268,7 @@
       });
       updateSelectAllUi();
     }
+
 
     function prepareSelectionState(groups) {
       selectionState = Object.create(null);
