@@ -1027,6 +1027,11 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
     excerpt_cache: dict[int, str] = {}
 
     # Prompt relajado para mejorar recall
+    system_prompt = (
+        "Eres un experto en protección de datos y privacidad. "
+        "Analiza los siguientes candidatos extraídos de un documento PDF. "
+        "Tu objetivo es identificar CUALQUIER dato que PUEDA ser sensible o personal. "
+        "Ante la duda, SIEMPRE clasifícalo como sensible (sensitive). "
         "REGLAS ESPECÍFICAS (EXTREMADAMENTE IMPORTANTES):\n"
         "1. Cuentas Bancarias: Detecta CUALQUIER secuencia que parezca cuenta (ej: 1465..., IBAN, CCC) Y NOMBRES DE BANCOS (ING, BBVA...). Son datos financieros PROTEGIDOS.\n"
         "2. Datos Sociales/Vulnerabilidad: 'Bono Social', 'Tarifa Social', 'Vulnerable', 'Renta Mínima'. Indican situación económica crítica. CLASIFICAR COMO HIGH.\n"
