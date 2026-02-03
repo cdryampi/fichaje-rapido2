@@ -23,6 +23,72 @@ from collections import deque
 from dotenv import load_dotenv
 import random
 from admin_panel import register_admin_panel
+import jsonschema
+from jsonschema import validate
+import openai
+
+PII_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "sensitive": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string"},
+                    "value": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
+                },
+                "required": ["label", "value", "confidence"]
+            }
+        },
+        "non_sensitive": {"type": "array"}
+    },
+    "required": ["sensitive", "non_sensitive"]
+}
+
+def validate_and_repair_json(json_str, schema, retry_count=1):
+    """Intenta parsear y validar JSON. Si falla, intenta repararlo con LLM (1 intento)."""
+    try:
+        # Limpieza basica de markdown si el modelo se pone creativo
+        if "```json" in json_str:
+            json_str = json_str.split("```json")[1].split("```")[0]
+        elif "```" in json_str:
+             json_str = json_str.split("```")[1].split("```")[0]
+             
+        data = json.loads(json_str)
+        validate(instance=data, schema=schema)
+        return data
+    except (json.JSONDecodeError, jsonschema.ValidationError) as e:
+        if retry_count > 0:
+            print(f"JSON Error: {e}. Intentando reparar...")
+            try:
+                # Usamos client global si existe, o creamos uno efimero
+                client = openai.Client() 
+                repair_prompt = f"Fix this JSON to match schema. Respond ONLY with valid JSON.\nError: {str(e)}\nJSON:\n{json_str}"
+                completion = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are a JSON repair tool. Output only valid JSON matching the schema."},
+                        {"role": "user", "content": repair_prompt}
+                    ],
+                    temperature=0
+                )
+                fixed_str = completion.choices[0].message.content
+                if "```json" in fixed_str:
+                    fixed_str = fixed_str.split("```json")[1].split("```")[0]
+                elif "```" in fixed_str:
+                    fixed_str = fixed_str.split("```")[1].split("```")[0]
+                    
+                data = json.loads(fixed_str)
+                validate(instance=data, schema=schema)
+                return data
+            except Exception as repair_err:
+                print(f"Repair failed: {repair_err}")
+                
+        # Fallback seguro
+        return {"sensitive": [], "non_sensitive": [], "error": "Validation Failed"}
 
 # Zona horaria (con fallback si falta tzdata en Windows)
 try:
@@ -1028,10 +1094,11 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
 
     # Prompt relajado para mejorar recall
     system_prompt = (
-        "Eres un experto en protección de datos y privacidad. "
-        "Analiza los siguientes candidatos extraídos de un documento PDF. "
-        "Tu objetivo es identificar CUALQUIER dato que PUEDA ser sensible o personal. "
-        "Ante la duda, SIEMPRE clasifícalo como sensible (sensitive). "
+        "Eres un experto en protección de datos y privacidad auditoria médica. "
+        "Tienes dos tareas:\n"
+        "1. CLASIFICAR los 'candidates' provistos como 'sensitive' o 'non_sensitive'.\n"
+        "2. ESCANEAR el 'document_excerpt' completo y EXTRAER cualquier otro dato sensible que falte en 'candidates' (ej: Nombres de pacientes/doctores, Fechas de nacimiento/DOB, Nº Historia Clínica, Códigos de barras/QR, Matrículas, Direcciones).\n"
+        "Ante la duda, SIEMPRE clasifícalo como sensible (sensitive) con confidence 'high'.\n"
         "REGLAS ESPECÍFICAS (EXTREMADAMENTE IMPORTANTES):\n"
         "1. Cuentas Bancarias: Detecta CUALQUIER secuencia que parezca cuenta (ej: 1465..., IBAN, CCC) Y NOMBRES DE BANCOS (ING, BBVA...). Son datos financieros PROTEGIDOS.\n"
         "2. Datos Sociales/Vulnerabilidad: 'Bono Social', 'Tarifa Social', 'Vulnerable', 'Renta Mínima'. Indican situación económica crítica. CLASIFICAR COMO HIGH.\n"
@@ -1195,10 +1262,10 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         if not content:
              raise ValueError("empty content")
 
-        try:
-            parsed = _parse_model_json(content)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("La IA devolvió un JSON inválido.") from exc
+        parsed = validate_and_repair_json(content, PII_SCHEMA)
+        if "error" in parsed:
+             # Si falla validación tras reintento, lanzamos error para que se capture y registre
+             raise RuntimeError(f"JSON Validation Failed: {parsed.get('error')}")
 
         sensitive_chunk, non_sensitive_chunk = _normalize_model_output(parsed)
         return sensitive_chunk, non_sensitive_chunk, truncated

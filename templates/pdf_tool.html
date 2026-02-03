@@ -994,32 +994,39 @@
           }
         },
         {
-          label: "Emails",
-          regex: function () { return /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi; }
-        },
-        {
-          label: "Nombres completos",
-          regex: function () { return /\b(?:[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+(?:\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+){1,3})\b/g; },
+          label: "Nombres completos / Doctores",
+          regex: function () {
+            // Matches: Dr. Name Surname, or basic Name Surname Name.
+            // Tries to avoid common False Positives like "Data Naixement" by excluding common keywords if possible,
+            // but easier to rely on 'Dr.' prefix being high confidence.
+            return /\b(?:Dr\.|Dra\.|Doctor|Doctora)\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+|\b[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+(?:\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+){1,2}\b/g;
+          },
           filter: function (value) {
+            var v = value.toLowerCase();
+            // Exclude common header terms
+            if (v.includes("data") || v.includes("fecha") || v.includes("naixement") || v.includes("nacimiento") || v.includes("factura")) return false;
             return value.split(/\s+/).length >= 2;
           }
         },
         {
-          label: "Direcciones",
-          regex: function () { return /\b(?:calle|c\/|avenida|av\.?|paseo|plaza|camino|carretera)\s+[A-Z\u00C0-\u017Fa-z\u00C0-\u017F0-9\s.,-]{3,60}\b/gi; }
-        },
-        {
-          label: "Codigos postales",
-          regex: function () { return /\b\d{5}\b/g; }
-        },
-        {
-          label: "Cuentas Bancarias / IBAN",
-          regex: function () { return /\b([a-zA-Z]{2}\d{2}\s?)(\d{4}\s?){4,6}\b|\b\d{4}\s?\d{4}\s?\d{2}\s?\d{10}\b/g; },
-          filter: function (value) {
-            var clean = value.replace(/[\s-]/g, "");
-            // Minimo longitud de CCC (20) o IBAN con ES (22)
-            return clean.length >= 20;
+          label: "Fecha Nacimiento/DOB",
+          regex: function () { return /\b(?:Data\s+Naixement|Fecha\s+Nacimiento|DOB|Nasc\.?)\s*:?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})\b/gi; },
+          filter: function (match) {
+            // Extract the date part if check was against full string
+            // But collectMatches logic iterates matches.
+            // If regex has group, we might want the group.
+            // Standard logic uses match[0].
+            // We'll let LLM extract standardized value or user see context.
+            return true;
           }
+        },
+        {
+          label: "Salud/Historia Clínica",
+          regex: function () { return /\b(?:Num\.|Nº|N\.|No\.)?\s*(?:H\.?C\.?|Hist\.?|Historia|Informe|Colegiado|CIP|Nuhsa)[:\s]*([A-Z0-9-]+)\b|\b(?:Diagn[oó]stico|Prescripci[oó]n|Anal[íi]tica|PCR|SARS|COVID)\b/gi; }
+        },
+        {
+          label: "Direcciones",
+          regex: function () { return /\b(?:calle|c\/|avenida|av\.?|paseo|plaza|plaça|camino|carretera|rbla|rambla)\s+[A-Z\u00C0-\u017Fa-z\u00C0-\u017F0-9\s.,-]{3,60}\b/gi; }
         },
         {
           label: "DNI/NIE",
@@ -1030,6 +1037,22 @@
           regex: function () { return /\b\d+\s+(?:habitants|habitantes|personas|empadronados|empadronades)\b/gi; }
         },
         {
+          label: "Telefonos",
+          regex: function () { return /\b(?:(?:\+|00)34\s?)?[6789]\d{2}\s?\d{3}\s?\d{3}\b|\b9\d{2}\s?\d{2}\s?\d{2}\s?\d{2}\b/g; }
+        },
+        {
+          label: "Emails",
+          regex: function () { return /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g; }
+        },
+        {
+          label: "Cuentas Bancarias / IBAN",
+          regex: function () { return /\bES\d{2}\s?\d{4}\s?\d{4}\s?\d{2}\s?\d{10}\b|\b\d{4}\s?\d{4}\s?\d{2}\s?\d{10}\b/g; },
+          filter: function (value) {
+            var clean = value.replace(/[\s-]/g, "");
+            return clean.length >= 20;
+          }
+        },
+        {
           label: "Nombres de Bancos",
           regex: function () { return /\b(?:Banco|Banc|Caixa|Caja|ING|BBVA|Santander|Sabadell|Kutxabank|Bankinter|Openbank|N26|Revolut)\s?[\w\.]*\b/gi; }
         },
@@ -1038,16 +1061,12 @@
           regex: function () { return /\b(?:Tarifa|Bono)\s(?:Social|Vulnerable)\b|\bVulnerabilidad\b|\bRenta\s(?:Garantizada|M[íi]nima)\b|\bIngreso\sM[íi]nimo\b/gi; }
         },
         {
-          label: "Salud/Discapacidad",
-          regex: function () { return /\b(?:Discapacidad|Minusval[íi]a|Incapacidad|Grado\sde|Baja\sMX|Baja\sm[ée]dica)\b/gi; }
-        },
-        {
           label: "Legal/Deudas",
           regex: function () { return /\b(?:Embargo|Ejecuci[óo]n|Apremio|Sentencia|Juzgado|Deuda|Impago)\b/gi; }
         },
         {
-          label: "Sindicatos/Ideología",
-          regex: function () { return /\b(?:Cuota|Afiliaci[óo]n)\s(?:Sindical|Partido)\b|\bSindicato\b|\bPartido\sPol[íi]tico\b/gi; }
+          label: "Códigos/IDs (CUPS, Ref.Cat, Matrícula)",
+          regex: function () { return /\bES[0-9A-Z]{20,22}\b|\b[0-9]{7}[A-Z0-9]{13}\b|\b\d{4}\s?[A-Z]{3}\b/g; }
         }
       ];
 
