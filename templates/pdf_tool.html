@@ -1094,6 +1094,52 @@
           }
         }
 
+        // ---- DRAW MANUAL RECT REDACTIONS ----
+        // Get rect redactions from manualRedactions array
+        var rectRedactions = [];
+        if (typeof manualRedactions !== 'undefined' && manualRedactions.length) {
+          rectRedactions = manualRedactions.filter(function (r) { return r.type === 'rect' && r.coords; });
+        }
+
+        if (rectRedactions.length > 0) {
+          for (var rIdx = 0; rIdx < rectRedactions.length; rIdx++) {
+            var redact = rectRedactions[rIdx];
+            var coords = redact.coords;
+            var pageIdx = (coords.page || 1) - 1; // Convert to 0-based
+
+            if (pageIdx >= 0 && pageIdx < pages.length) {
+              var targetPage = pages[pageIdx];
+              var pageSize = targetPage.getSize();
+
+              // Convert screen coordinates to PDF coordinates
+              // Screen: origin top-left, Y increases downward
+              // PDF: origin bottom-left, Y increases upward
+              var containerW = coords.containerWidth || 1;
+              var containerH = coords.containerHeight || 1;
+
+              // Scale factors
+              var scaleX = pageSize.width / containerW;
+              var scaleY = pageSize.height / containerH;
+
+              // Convert coordinates
+              var pdfX = coords.x * scaleX;
+              // Flip Y coordinate: screen Y from top, PDF Y from bottom
+              var pdfY = pageSize.height - ((coords.y + coords.height) * scaleY);
+              var pdfW = coords.width * scaleX;
+              var pdfH = coords.height * scaleY;
+
+              targetPage.drawRectangle({
+                x: pdfX,
+                y: pdfY,
+                width: pdfW,
+                height: pdfH,
+                color: PDFLib.rgb(0, 0, 0),
+                opacity: 1,
+              });
+            }
+          }
+        }
+
         var pdfBytesModified = await pdfDoc.save();
         return pdfBytesModified;
 
