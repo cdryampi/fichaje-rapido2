@@ -37,6 +37,37 @@
         <i data-lucide="download" class="icon"></i>
         Guardar PDF Censurado
       </button>
+
+      <!-- Toolbar de censura manual -->
+      <div class="manual-redact-toolbar" id="manual-redact-toolbar">
+        <span class="toolbar-label">Censura manual:</span>
+        <button type="button" class="btn-tool" data-tool="click" title="Click en texto para censurar">
+          <i data-lucide="mouse-pointer-click" class="icon"></i> Click
+        </button>
+        <button type="button" class="btn-tool" data-tool="search" title="Buscar texto en documento">
+          <i data-lucide="search" class="icon"></i> Buscar
+        </button>
+        <button type="button" class="btn-tool" data-tool="draw" title="Dibujar rectángulo de censura">
+          <i data-lucide="square-dashed" class="icon"></i> Dibujar
+        </button>
+      </div>
+
+      <!-- Panel de búsqueda (visible solo en modo search) -->
+      <div class="search-panel" id="search-panel" style="display:none;">
+        <div class="search-input-row">
+          <input type="text" id="search-input" placeholder="Texto a buscar..." class="search-input">
+          <button type="button" class="btn-xs btn-search" id="search-btn">Buscar</button>
+        </div>
+        <div class="search-results" id="search-results"></div>
+      </div>
+
+      <!-- Lista de redacciones manuales -->
+      <div class="manual-redactions-panel" id="manual-redactions-panel" style="display:none;">
+        <h5>Redacciones manuales</h5>
+        <ul class="manual-redactions-list" id="manual-redactions-list"></ul>
+        <button type="button" class="btn-xs btn-clear-manual" id="clear-manual-redactions">Limpiar todas</button>
+      </div>
+
       <div class="detection-panel" data-detection-output>
         <h4>Resultados del analisis</h4>
         <p class="muted small" data-detection-summary>No se ha analizado ningun PDF todavia.</p>
@@ -387,6 +418,214 @@
       max-width: 360px
     }
   }
+
+  /* Manual Redaction Toolbar */
+  .manual-redact-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px;
+    background: #1e293b;
+    border-radius: 8px;
+    border: 1px solid #334155;
+  }
+
+  .toolbar-label {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-right: 4px;
+  }
+
+  .btn-tool {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #475569;
+    background: transparent;
+    color: #e2e8f0;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-tool:hover {
+    background: #334155;
+    border-color: #64748b;
+  }
+
+  .btn-tool.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+  }
+
+  .btn-tool .icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Search Panel */
+  .search-panel {
+    margin-top: 8px;
+    padding: 12px;
+    background: #1e293b;
+    border-radius: 8px;
+    border: 1px solid #334155;
+  }
+
+  .search-input-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .search-input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #475569;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-size: 13px;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+  }
+
+  .btn-search {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+  }
+
+  .search-results {
+    margin-top: 8px;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+
+  .search-result-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: #cbd5e1;
+    cursor: pointer;
+  }
+
+  .search-result-item:hover {
+    background: rgba(59, 130, 246, 0.2);
+  }
+
+  .search-result-item.selected {
+    background: rgba(59, 130, 246, 0.3);
+    border: 1px solid #3b82f6;
+  }
+
+  /* Manual Redactions Panel */
+  .manual-redactions-panel {
+    margin-top: 8px;
+    padding: 12px;
+    background: #1e293b;
+    border-radius: 8px;
+    border: 1px solid #334155;
+  }
+
+  .manual-redactions-panel h5 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: #94a3b8;
+  }
+
+  .manual-redactions-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .manual-redactions-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 4px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: #fca5a5;
+  }
+
+  .manual-redactions-list .redact-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .manual-redactions-list .redact-remove {
+    background: transparent;
+    border: none;
+    color: #f87171;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 14px;
+  }
+
+  .manual-redactions-list .redact-remove:hover {
+    color: #ef4444;
+  }
+
+  .btn-clear-manual {
+    margin-top: 8px;
+    background: transparent;
+    border-color: #ef4444;
+    color: #f87171;
+  }
+
+  .btn-clear-manual:hover {
+    background: rgba(239, 68, 68, 0.2);
+  }
+
+  /* Draw mode indicator */
+  .pdf-viewer__frame.draw-mode {
+    cursor: crosshair;
+  }
+
+  .pdf-viewer__frame.click-mode {
+    cursor: pointer;
+  }
+
+  .draw-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .draw-overlay.active {
+    pointer-events: auto;
+  }
+
+  .draw-rect-preview {
+    position: absolute;
+    border: 2px dashed #ef4444;
+    background: rgba(239, 68, 68, 0.2);
+    pointer-events: none;
+  }
 </style>
 <script>
   (function () {
@@ -574,8 +813,10 @@
     var currentRedactedBlobUrl = null;
 
     obfuscateButton.addEventListener("click", function () {
-      if (!latestFindings || !latestFindings.length) {
-        alert("Detecta los datos sensibles antes de emborronarlos.");
+      var hasAiFindings = latestFindings && latestFindings.length;
+      var hasManualRedactions = typeof manualRedactions !== 'undefined' && manualRedactions.length > 0;
+      if (!hasAiFindings && !hasManualRedactions) {
+        alert("Detecta datos sensibles o añade redacciones manuales primero.");
         return;
       }
       var selectedValues = getSelectedValues();
@@ -680,6 +921,22 @@
               });
           });
       });
+    }
+
+    // Function to check if text should be redacted
+    function shouldRedactItem(text, redactionTerms) {
+      if (!text || !redactionTerms || !redactionTerms.length) return false;
+      var normalized = text.toLowerCase().trim();
+      for (var i = 0; i < redactionTerms.length; i++) {
+        var term = redactionTerms[i];
+        if (!term) continue;
+        var normalizedTerm = term.toLowerCase().trim();
+        // Check if the text contains or matches the term
+        if (normalized.includes(normalizedTerm) || normalizedTerm.includes(normalized)) {
+          return true;
+        }
+      }
+      return false;
     }
 
     async function calculateRedactionCoordinates(pdfBytes, redactionTerms) {
@@ -1447,6 +1704,18 @@
           }
         }
       });
+      // Include manual text redactions
+      if (typeof manualRedactions !== 'undefined' && manualRedactions.length) {
+        manualRedactions.forEach(function (r) {
+          if (r.type === 'text' && r.value) {
+            var normalized = normalizeTerm(r.value);
+            if (!seen[normalized]) {
+              seen[normalized] = true;
+              values.push(r.value);
+            }
+          }
+        });
+      }
       return values;
     }
 
@@ -1767,6 +2036,358 @@
         }
       });
     }
+
+    // ============================================================
+    // MANUAL REDACTION TOOLS
+    // ============================================================
+
+    var manualRedactions = [];
+    var currentTool = null; // 'click', 'search', 'draw', or null
+    var drawState = { isDrawing: false, startX: 0, startY: 0, currentPage: 1 };
+
+    // DOM elements for manual tools
+    var manualToolbar = document.getElementById('manual-redact-toolbar');
+    var searchPanel = document.getElementById('search-panel');
+    var searchInput = document.getElementById('search-input');
+    var searchBtn = document.getElementById('search-btn');
+    var searchResults = document.getElementById('search-results');
+    var manualRedactionsPanel = document.getElementById('manual-redactions-panel');
+    var manualRedactionsList = document.getElementById('manual-redactions-list');
+    var clearManualBtn = document.getElementById('clear-manual-redactions');
+
+    // Initialize toolbar buttons
+    if (manualToolbar) {
+      var toolButtons = manualToolbar.querySelectorAll('.btn-tool');
+      toolButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var tool = btn.getAttribute('data-tool');
+          setActiveTool(currentTool === tool ? null : tool);
+        });
+      });
+    }
+
+    function setActiveTool(tool) {
+      currentTool = tool;
+
+      // Update button states
+      var toolButtons = manualToolbar ? manualToolbar.querySelectorAll('.btn-tool') : [];
+      toolButtons.forEach(function (btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-tool') === tool);
+      });
+
+      // Show/hide search panel
+      if (searchPanel) {
+        searchPanel.style.display = tool === 'search' ? 'block' : 'none';
+      }
+
+      // Update container cursor
+      if (container) {
+        container.classList.remove('click-mode', 'draw-mode');
+        if (tool === 'click') container.classList.add('click-mode');
+        if (tool === 'draw') container.classList.add('draw-mode');
+      }
+
+      // Manage draw overlay
+      manageDrawOverlay(tool === 'draw');
+
+      // Re-init lucide icons
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    // ---- SEARCH MODE ----
+    if (searchBtn) {
+      searchBtn.addEventListener('click', performSearch);
+    }
+    if (searchInput) {
+      searchInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') performSearch();
+      });
+    }
+
+    function performSearch() {
+      if (!searchInput || !searchResults) return;
+      var query = searchInput.value.trim();
+      if (!query) {
+        searchResults.innerHTML = '<div style="color:#94a3b8;font-size:12px;">Escribe algo para buscar</div>';
+        return;
+      }
+      if (!documentFullText) {
+        searchResults.innerHTML = '<div style="color:#f87171;font-size:12px;">Primero carga un PDF</div>';
+        return;
+      }
+
+      // Find all occurrences
+      var regex = new RegExp(escapeRegExp(query), 'gi');
+      var matches = [];
+      var match;
+      while ((match = regex.exec(documentFullText)) !== null) {
+        matches.push({
+          value: match[0],
+          index: match.index,
+          context: documentFullText.slice(Math.max(0, match.index - 20), match.index + match[0].length + 20)
+        });
+      }
+
+      if (!matches.length) {
+        searchResults.innerHTML = '<div style="color:#94a3b8;font-size:12px;">No se encontraron coincidencias</div>';
+        return;
+      }
+
+      // Render results
+      var html = '<div style="margin-bottom:6px;font-size:11px;color:#94a3b8;">' + matches.length + ' coincidencia(s)</div>';
+      html += '<button type="button" class="btn-xs" id="add-all-search" style="margin-bottom:8px;">Añadir todas</button>';
+      matches.forEach(function (m, i) {
+        var isAdded = manualRedactions.some(function (r) { return r.value === m.value && r.type === 'text'; });
+        html += '<div class="search-result-item' + (isAdded ? ' selected' : '') + '" data-search-idx="' + i + '">';
+        html += '<span>..."' + escapeHtml(m.context).replace(new RegExp(escapeRegExp(m.value), 'gi'), '<strong>' + escapeHtml(m.value) + '</strong>') + '"...</span>';
+        html += '</div>';
+      });
+      searchResults.innerHTML = html;
+
+      // Store matches for click handler
+      searchResults._matches = matches;
+
+      // Add all button handler
+      var addAllBtn = document.getElementById('add-all-search');
+      if (addAllBtn) {
+        addAllBtn.addEventListener('click', function () {
+          matches.forEach(function (m) {
+            addManualRedaction({ type: 'text', value: m.value, label: 'Búsqueda' });
+          });
+          performSearch(); // Refresh display
+        });
+      }
+
+      // Click on individual result
+      searchResults.querySelectorAll('.search-result-item').forEach(function (item) {
+        item.addEventListener('click', function () {
+          var idx = parseInt(item.getAttribute('data-search-idx'));
+          var m = matches[idx];
+          if (m) {
+            addManualRedaction({ type: 'text', value: m.value, label: 'Búsqueda' });
+            item.classList.add('selected');
+          }
+        });
+      });
+    }
+
+    // ---- CLICK MODE ----
+    // For click mode, we need to intercept clicks on the PDF viewer
+    // Since we're using native PDF viewer (object tag), we need a different approach
+    // We'll add an overlay or use the existing text content from pdf.js
+
+    if (container) {
+      container.addEventListener('click', function (e) {
+        if (currentTool !== 'click') return;
+        if (!currentPdfDoc || !documentFullText) {
+          alert('Primero carga un PDF');
+          return;
+        }
+
+        // Prompt user for text to redact (simple approach for native viewer)
+        var text = prompt('Introduce el texto exacto a censurar:');
+        if (!text || !text.trim()) return;
+
+        // Verify text exists in document
+        if (documentFullText.toLowerCase().includes(text.toLowerCase())) {
+          addManualRedaction({ type: 'text', value: text.trim(), label: 'Click manual' });
+        } else {
+          alert('El texto "' + text + '" no se encontró en el documento.');
+        }
+      });
+    }
+
+    // ---- DRAW MODE ----
+    var drawOverlay = null;
+    var drawPreview = null;
+
+    function manageDrawOverlay(active) {
+      if (active && !drawOverlay && container) {
+        // Create overlay
+        drawOverlay = document.createElement('div');
+        drawOverlay.className = 'draw-overlay active';
+        drawOverlay.id = 'draw-overlay';
+        container.appendChild(drawOverlay);
+
+        drawPreview = document.createElement('div');
+        drawPreview.className = 'draw-rect-preview';
+        drawPreview.style.display = 'none';
+        drawOverlay.appendChild(drawPreview);
+
+        // Mouse events
+        drawOverlay.addEventListener('mousedown', onDrawStart);
+        drawOverlay.addEventListener('mousemove', onDrawMove);
+        drawOverlay.addEventListener('mouseup', onDrawEnd);
+        drawOverlay.addEventListener('mouseleave', onDrawEnd);
+      } else if (!active && drawOverlay) {
+        drawOverlay.remove();
+        drawOverlay = null;
+        drawPreview = null;
+      }
+    }
+
+    function onDrawStart(e) {
+      if (!drawOverlay) return;
+      var rect = drawOverlay.getBoundingClientRect();
+      drawState.isDrawing = true;
+      drawState.startX = e.clientX - rect.left;
+      drawState.startY = e.clientY - rect.top;
+      if (drawPreview) {
+        drawPreview.style.left = drawState.startX + 'px';
+        drawPreview.style.top = drawState.startY + 'px';
+        drawPreview.style.width = '0';
+        drawPreview.style.height = '0';
+        drawPreview.style.display = 'block';
+      }
+    }
+
+    function onDrawMove(e) {
+      if (!drawState.isDrawing || !drawOverlay || !drawPreview) return;
+      var rect = drawOverlay.getBoundingClientRect();
+      var currentX = e.clientX - rect.left;
+      var currentY = e.clientY - rect.top;
+
+      var x = Math.min(drawState.startX, currentX);
+      var y = Math.min(drawState.startY, currentY);
+      var w = Math.abs(currentX - drawState.startX);
+      var h = Math.abs(currentY - drawState.startY);
+
+      drawPreview.style.left = x + 'px';
+      drawPreview.style.top = y + 'px';
+      drawPreview.style.width = w + 'px';
+      drawPreview.style.height = h + 'px';
+    }
+
+    function onDrawEnd(e) {
+      if (!drawState.isDrawing || !drawOverlay) return;
+      drawState.isDrawing = false;
+
+      if (drawPreview) {
+        var x = parseFloat(drawPreview.style.left);
+        var y = parseFloat(drawPreview.style.top);
+        var w = parseFloat(drawPreview.style.width);
+        var h = parseFloat(drawPreview.style.height);
+
+        if (w > 10 && h > 10) {
+          // Get container dimensions for coordinate conversion
+          var containerRect = container.getBoundingClientRect();
+
+          // Add as manual redaction with coordinates
+          addManualRedaction({
+            type: 'rect',
+            label: 'Área dibujada',
+            value: 'Rectángulo (' + Math.round(w) + 'x' + Math.round(h) + ')',
+            coords: {
+              page: 1, // TODO: detect current page
+              x: x,
+              y: y,
+              width: w,
+              height: h,
+              containerWidth: containerRect.width,
+              containerHeight: containerRect.height
+            }
+          });
+        }
+
+        drawPreview.style.display = 'none';
+      }
+    }
+
+    // ---- MANUAL REDACTIONS MANAGEMENT ----
+    function addManualRedaction(item) {
+      // Check for duplicates
+      var isDuplicate = manualRedactions.some(function (r) {
+        if (r.type !== item.type) return false;
+        if (r.type === 'text') return r.value === item.value;
+        if (r.type === 'rect') {
+          var c1 = r.coords, c2 = item.coords;
+          return c1 && c2 && c1.x === c2.x && c1.y === c2.y && c1.width === c2.width && c1.height === c2.height;
+        }
+        return false;
+      });
+
+      if (isDuplicate) return;
+
+      manualRedactions.push(item);
+      renderManualRedactions();
+      updateObfuscateButtonState();
+    }
+
+    function removeManualRedaction(index) {
+      manualRedactions.splice(index, 1);
+      renderManualRedactions();
+      updateObfuscateButtonState();
+    }
+
+    function clearAllManualRedactions() {
+      manualRedactions = [];
+      renderManualRedactions();
+      updateObfuscateButtonState();
+    }
+
+    function renderManualRedactions() {
+      if (!manualRedactionsList || !manualRedactionsPanel) return;
+
+      if (!manualRedactions.length) {
+        manualRedactionsPanel.style.display = 'none';
+        return;
+      }
+
+      manualRedactionsPanel.style.display = 'block';
+
+      var html = '';
+      manualRedactions.forEach(function (r, i) {
+        html += '<li>';
+        html += '<span class="redact-text" title="' + escapeHtml(r.value) + '">';
+        html += '<strong>' + escapeHtml(r.label) + ':</strong> ' + escapeHtml(r.value);
+        html += '</span>';
+        html += '<button type="button" class="redact-remove" data-idx="' + i + '">✕</button>';
+        html += '</li>';
+      });
+      manualRedactionsList.innerHTML = html;
+
+      // Add remove handlers
+      manualRedactionsList.querySelectorAll('.redact-remove').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var idx = parseInt(btn.getAttribute('data-idx'));
+          removeManualRedaction(idx);
+        });
+      });
+    }
+
+    if (clearManualBtn) {
+      clearManualBtn.addEventListener('click', function () {
+        if (confirm('¿Limpiar todas las redacciones manuales?')) {
+          clearAllManualRedactions();
+        }
+      });
+    }
+
+    function updateObfuscateButtonState() {
+      var hasAiFindings = latestFindings && latestFindings.length > 0;
+      var hasManual = manualRedactions.length > 0;
+      if (obfuscateButton) {
+        obfuscateButton.disabled = !hasAiFindings && !hasManual;
+      }
+    }
+
+    // ---- INTEGRATE WITH EXISTING REDACTION SYSTEM ----
+    // Override getSelectedValues to include manual redactions
+    var originalGetSelectedValues = typeof getSelectedValues === 'function' ? getSelectedValues : null;
+
+    window.getManualRedactionValues = function () {
+      return manualRedactions
+        .filter(function (r) { return r.type === 'text'; })
+        .map(function (r) { return r.value; });
+    };
+
+    window.getManualRectRedactions = function () {
+      return manualRedactions.filter(function (r) { return r.type === 'rect'; });
+    };
+
+    // Patch shouldRedactItem to include manual text redactions
+    var originalShouldRedactItem = typeof shouldRedactItem === 'function' ? shouldRedactItem : null;
+
   })();
 </script>
 
