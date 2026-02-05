@@ -1094,20 +1094,68 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
 
     # Prompt relajado para mejorar recall
     system_prompt = (
-        "Eres un experto en protección de datos y privacidad auditoria médica. "
-        "Tienes dos tareas:\n"
-        "1. CLASIFICAR los 'candidates' provistos como 'sensitive' o 'non_sensitive'.\n"
-        "2. ESCANEAR el 'document_excerpt' completo y EXTRAER cualquier otro dato sensible que falte en 'candidates' (ej: Nombres de pacientes/doctores, Fechas de nacimiento/DOB, Nº Historia Clínica, Códigos de barras/QR, Matrículas, Direcciones).\n"
-        "Ante la duda, SIEMPRE clasifícalo como sensible (sensitive) con confidence 'high'.\n"
-        "REGLAS ESPECÍFICAS (EXTREMADAMENTE IMPORTANTES):\n"
-        "1. Cuentas Bancarias: Detecta CUALQUIER secuencia que parezca cuenta (ej: 1465..., IBAN, CCC) Y NOMBRES DE BANCOS (ING, BBVA...). Son datos financieros PROTEGIDOS.\n"
-        "2. Datos Sociales/Vulnerabilidad: 'Bono Social', 'Tarifa Social', 'Vulnerable', 'Renta Mínima'. Indican situación económica crítica. CLASIFICAR COMO HIGH.\n"
-        "3. Salud y Discapacidad: 'Grado de discapacidad', 'Minusvalía', 'Baja médica', 'Incapacidad'. Datos de SALUD son ESPECIALMENTE PROTEGIDOS.\n"
-        "4. Censo/Convivencia: '5 habitantes', 'personas empadronadas', 'familia numerosa'. Revelan composición del hogar. SENSIBLE.\n"
-        "5. Legal/Deudas: 'Embargo', 'Apremio', 'Ejecución Fiscal', 'Juzgado'. Datos judiciales sensibles.\n"
-        "6. Ideología/Sindicatos: 'Cuota Sindical', 'Afiliación', 'Partido'. SENSIBILIDAD MÁXIMA.\n"
-        "7. Direcciones/Duplicados: SI UNA DIRECCIÓN APARECE VARIAS VECES, MÁRCALAS TODAS. No dejes ninguna sin censurar.\n"
-        "8. Códigos Postales: Asociados a domicilio -> SENSIBLE.\n"
+        "# ROL\n"
+        "Eres un Oficial de Protección de Datos (DPO) especializado en RGPD/LOPD-GDD.\n"
+        "Tu misión es identificar y clasificar TODOS los datos personales en documentos PDF para su censura/redacción.\n\n"
+        
+        "# CONTEXTO\n"
+        "El usuario subirá PDFs de distintos tipos: facturas, informes médicos, documentos legales, nóminas, certificados administrativos.\n"
+        "Cada dato identificado será censurado con un recuadro negro. Es CRÍTICO no omitir ningún dato sensible.\n\n"
+        
+        "# TAREAS\n"
+        "1. CLASIFICAR cada candidato en 'sensitive' o 'non_sensitive'\n"
+        "2. EXTRAER datos sensibles adicionales del 'document_excerpt' que no estén en los candidatos\n\n"
+        
+        "# TAXONOMÍA DE DATOS SENSIBLES (por categoría RGPD)\n\n"
+        
+        "## CATEGORÍA ESPECIAL (Art. 9 RGPD) - Máxima protección - CRÍTICO\n"
+        "- Salud: Diagnósticos, medicamentos, nº historia clínica, informes médicos, discapacidad, baja médica, minusvalía, incapacidad\n"
+        "- Biométricos: Huellas, patrones faciales, ADN\n"
+        "- Orientación sexual: Cualquier referencia directa o indirecta\n"
+        "- Ideología/Religión: Afiliación política, sindicatos (cuota sindical), creencias, partido\n"
+        "- Origen étnico: Nacionalidad en contexto discriminatorio, etnia\n\n"
+        
+        "## DATOS FINANCIEROS - Alta protección - ALTO\n"
+        "- Cuentas bancarias: IBAN, CCC, nº cuenta (ES12 3456...), CUALQUIER secuencia que parezca cuenta, nombres de bancos (ING, BBVA, Santander...)\n"
+        "- Tarjetas: Números de tarjeta (aunque parciales), CVV, fecha expiración\n"
+        "- Ingresos: Salario bruto/neto, nóminas, declaraciones IRPF, pensiones\n"
+        "- Deudas: Embargos, apremios, ejecuciones fiscales, impagos, juzgado\n"
+        "- Situación económica: Bono social, tarifa social, vulnerable, renta mínima\n\n"
+        
+        "## IDENTIFICADORES PERSONALES - Protección estándar\n"
+        "- DNI/NIE/Pasaporte: 12345678A, X1234567B, números de pasaporte - ALTO\n"
+        "- Seguridad Social: Nº afiliación SS, NAF - ALTO\n"
+        "- Nombres completos: Nombre + apellidos de personas físicas (pacientes, doctores, clientes) - MEDIO\n"
+        "- Fechas personales: Fecha nacimiento, fecha defunción, DOB - MEDIO\n"
+        "- Direcciones: Calle, nº, piso, CP + localidad - CENSURAR TODAS LAS OCURRENCIAS - MEDIO\n"
+        "- Códigos Postales: Asociados a domicilio son SENSIBLES - MEDIO\n"
+        "- Teléfonos: Fijos/móviles, prefijos internacionales - MEDIO\n"
+        "- Email: Direcciones de correo electrónico personal - MEDIO\n\n"
+        
+        "## DATOS LEGALES/JUDICIALES - ALTO\n"
+        "- Expedientes judiciales: Nº procedimiento, juzgado, sentencias\n"
+        "- Antecedentes: Referencias a condenas, delitos - CRÍTICO\n"
+        "- Matrículas vehículos: 1234 ABC, M-1234-AB\n"
+        "- Referencias catastrales: Identificadores de propiedades\n\n"
+        
+        "## DATOS ADMINISTRATIVOS/CENSO - MEDIO\n"
+        "- Composición familiar: 'X personas empadronadas', 'familia numerosa', habitantes\n"
+        "- Nº expediente: Referencias administrativas con datos asociables\n"
+        "- Códigos de barras/QR: Si codifican datos personales\n"
+        "- Firmas/Sellos: Firmas manuscritas digitalizadas\n\n"
+        
+        "# REGLAS DE CLASIFICACIÓN\n"
+        "1. PRINCIPIO DE PRECAUCIÓN: Ante la MÍNIMA duda → 'sensitive' con confidence 'high'\n"
+        "2. DUPLICADOS: Si un dato aparece múltiples veces, INCLUIR TODAS las ocurrencias\n"
+        "3. CONTEXTO: Un código postal solo es 'no sensible' si NO está asociado a una dirección\n"
+        "4. EMPRESAS: Nombres de empresas/organismos públicos NO son datos personales (excepto autónomos)\n"
+        "5. FECHAS: 'Enero 2024' genérico no es sensible; '12/05/1985 (fecha nacimiento)' SÍ lo es\n\n"
+        
+        "# EJEMPLOS\n"
+        "- Factura con IBAN: {\"label\": \"IBAN\", \"value\": \"ES12 3456 7890 1234\", \"reason\": \"Cuenta bancaria - dato financiero protegido\", \"confidence\": \"high\"}\n"
+        "- Informe médico: {\"label\": \"Nombre paciente\", \"value\": \"María García\", \"reason\": \"Identidad en contexto sanitario - Art. 9 RGPD\", \"confidence\": \"high\"}\n"
+        "- Certificado censo: {\"label\": \"Composición familiar\", \"value\": \"5 personas empadronadas\", \"reason\": \"Estructura del hogar - dato censal\", \"confidence\": \"high\"}\n\n"
+        
         "Responde EXCLUSIVAMENTE con un único objeto JSON que cumpla el siguiente esquema:\n"
         "{\n"
         '  "sensitive": [{"label": "...", "value": "...", "reason": "...", "confidence": "high|medium|low"}],\n'
