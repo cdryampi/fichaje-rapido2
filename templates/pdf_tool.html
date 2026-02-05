@@ -1109,21 +1109,12 @@
 
             if (pageIdx >= 0 && pageIdx < pages.length) {
               var targetPage = pages[pageIdx];
-              var pageSize = targetPage.getSize();
 
-              // Use percentage-based coordinates (0-1 range)
-              // These are relative positions from top-left of overlay
-              var xPercent = coords.xPercent || 0;
-              var yPercent = coords.yPercent || 0;
-              var wPercent = coords.wPercent || 0;
-              var hPercent = coords.hPercent || 0;
-
-              // Convert to PDF coordinates
-              var pdfW = wPercent * pageSize.width;
-              var pdfH = hPercent * pageSize.height;
-              var pdfX = xPercent * pageSize.width;
-              // Flip Y: screen Y is from top, PDF Y is from bottom
-              var pdfY = pageSize.height - (yPercent * pageSize.height) - pdfH;
+              // Use pre-calculated PDF coordinates directly
+              var pdfX = coords.pdfX || 0;
+              var pdfY = coords.pdfY || 0;
+              var pdfW = coords.pdfW || 0;
+              var pdfH = coords.pdfH || 0;
 
               targetPage.drawRectangle({
                 x: pdfX,
@@ -2356,7 +2347,7 @@
       drawPreview.style.height = h + 'px';
     }
 
-    function onDrawEnd(e) {
+    async function onDrawEnd(e) {
       if (!drawState.isDrawing || !interactionOverlay) return;
       drawState.isDrawing = false;
 
@@ -2367,26 +2358,48 @@
         var h = parseFloat(drawPreview.style.height);
 
         if (w > 10 && h > 10) {
-          // Get overlay dimensions (matches container)
+          // Get overlay dimensions
           var overlayRect = interactionOverlay.getBoundingClientRect();
 
-          // Convert to percentage-based coordinates (0-1 range)
-          var xPercent = x / overlayRect.width;
-          var yPercent = y / overlayRect.height;
-          var wPercent = w / overlayRect.width;
-          var hPercent = h / overlayRect.height;
+          // Get PDF page dimensions from pdf.js
+          var pdfPageWidth = overlayRect.width;  // Default fallback
+          var pdfPageHeight = overlayRect.height;
 
-          // Add as manual redaction with percentage coordinates
+          if (currentPdfDoc) {
+            try {
+              var page = await currentPdfDoc.getPage(1);
+              var viewport = page.getViewport({ scale: 1.0 });
+              pdfPageWidth = viewport.width;
+              pdfPageHeight = viewport.height;
+            } catch (err) {
+              console.warn('Could not get PDF dimensions:', err);
+            }
+          }
+
+          // Calculate coordinates directly in PDF units
+          // The overlay fills the container, but we need to map to PDF coordinates
+          var scaleX = pdfPageWidth / overlayRect.width;
+          var scaleY = pdfPageHeight / overlayRect.height;
+
+          var pdfX = x * scaleX;
+          var pdfY = y * scaleY;
+          var pdfW = w * scaleX;
+          var pdfH = h * scaleY;
+
+          // Add as manual redaction with PDF coordinates
           addManualRedaction({
             type: 'rect',
             label: 'Área dibujada',
             value: 'Rectángulo (' + Math.round(w) + 'x' + Math.round(h) + ' px)',
             coords: {
-              page: 1, // TODO: detect current page
-              xPercent: xPercent,
-              yPercent: yPercent,
-              wPercent: wPercent,
-              hPercent: hPercent
+              page: 1,
+              // Store in PDF coordinate system (origin bottom-left)
+              pdfX: pdfX,
+              pdfY: pdfPageHeight - pdfY - pdfH, // Flip Y
+              pdfW: pdfW,
+              pdfH: pdfH,
+              pdfPageWidth: pdfPageWidth,
+              pdfPageHeight: pdfPageHeight
             }
           });
         }
