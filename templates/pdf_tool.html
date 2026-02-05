@@ -1111,22 +1111,19 @@
               var targetPage = pages[pageIdx];
               var pageSize = targetPage.getSize();
 
-              // Convert screen coordinates to PDF coordinates
-              // Screen: origin top-left, Y increases downward
-              // PDF: origin bottom-left, Y increases upward
-              var containerW = coords.containerWidth || 1;
-              var containerH = coords.containerHeight || 1;
+              // Use percentage-based coordinates (0-1 range)
+              // These are relative positions from top-left of overlay
+              var xPercent = coords.xPercent || 0;
+              var yPercent = coords.yPercent || 0;
+              var wPercent = coords.wPercent || 0;
+              var hPercent = coords.hPercent || 0;
 
-              // Scale factors
-              var scaleX = pageSize.width / containerW;
-              var scaleY = pageSize.height / containerH;
-
-              // Convert coordinates
-              var pdfX = coords.x * scaleX;
-              // Flip Y coordinate: screen Y from top, PDF Y from bottom
-              var pdfY = pageSize.height - ((coords.y + coords.height) * scaleY);
-              var pdfW = coords.width * scaleX;
-              var pdfH = coords.height * scaleY;
+              // Convert to PDF coordinates
+              var pdfW = wPercent * pageSize.width;
+              var pdfH = hPercent * pageSize.height;
+              var pdfX = xPercent * pageSize.width;
+              // Flip Y: screen Y is from top, PDF Y is from bottom
+              var pdfY = pageSize.height - (yPercent * pageSize.height) - pdfH;
 
               targetPage.drawRectangle({
                 x: pdfX,
@@ -2370,22 +2367,26 @@
         var h = parseFloat(drawPreview.style.height);
 
         if (w > 10 && h > 10) {
-          // Get container dimensions for coordinate conversion
-          var containerRect = container.getBoundingClientRect();
+          // Get overlay dimensions (matches container)
+          var overlayRect = interactionOverlay.getBoundingClientRect();
 
-          // Add as manual redaction with coordinates
+          // Convert to percentage-based coordinates (0-1 range)
+          var xPercent = x / overlayRect.width;
+          var yPercent = y / overlayRect.height;
+          var wPercent = w / overlayRect.width;
+          var hPercent = h / overlayRect.height;
+
+          // Add as manual redaction with percentage coordinates
           addManualRedaction({
             type: 'rect',
             label: 'Área dibujada',
-            value: 'Rectángulo (' + Math.round(w) + 'x' + Math.round(h) + ')',
+            value: 'Rectángulo (' + Math.round(w) + 'x' + Math.round(h) + ' px)',
             coords: {
               page: 1, // TODO: detect current page
-              x: x,
-              y: y,
-              width: w,
-              height: h,
-              containerWidth: containerRect.width,
-              containerHeight: containerRect.height
+              xPercent: xPercent,
+              yPercent: yPercent,
+              wPercent: wPercent,
+              hPercent: hPercent
             }
           });
         }
