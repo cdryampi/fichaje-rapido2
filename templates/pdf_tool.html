@@ -2182,39 +2182,49 @@
         drawPreview = null;
       }
 
+      // Remove click capture panel if exists
+      var existingClickPanel = document.getElementById('click-capture-panel');
+      if (existingClickPanel) existingClickPanel.remove();
+
       if (!tool || tool === 'search') return;
       if (!container) return;
 
-      // Create overlay
+      // For CLICK mode: show a floating panel with instructions, don't block PDF
+      if (tool === 'click') {
+        var clickPanel = document.createElement('div');
+        clickPanel.id = 'click-capture-panel';
+        clickPanel.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(59,130,246,0.95);color:white;padding:12px 20px;border-radius:8px;font-size:13px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+        clickPanel.innerHTML = '<span>📝 Selecciona texto en el PDF, luego pulsa:</span><button type="button" id="capture-selection-btn" style="background:white;color:#3b82f6;border:none;padding:6px 14px;border-radius:6px;font-weight:600;cursor:pointer;">Añadir selección</button>';
+        container.appendChild(clickPanel);
+
+        // Capture selection button handler
+        document.getElementById('capture-selection-btn').addEventListener('click', onCaptureSelection);
+        return;
+      }
+
+      // For DRAW mode: create blocking overlay
       interactionOverlay = document.createElement('div');
-      interactionOverlay.className = (tool === 'click' ? 'click-overlay' : 'draw-overlay') + ' active';
+      interactionOverlay.className = 'draw-overlay active';
       interactionOverlay.id = 'interaction-overlay';
 
-      // Add hint
+      // Add hint for draw
       overlayHint = document.createElement('div');
       overlayHint.className = 'overlay-hint';
-      if (tool === 'click') {
-        overlayHint.textContent = 'Haz click para censurar texto';
-      } else if (tool === 'draw') {
-        overlayHint.textContent = 'Arrastra para dibujar un rectángulo';
-        // Create preview rect for draw mode
-        drawPreview = document.createElement('div');
-        drawPreview.className = 'draw-rect-preview';
-        drawPreview.style.display = 'none';
-        interactionOverlay.appendChild(drawPreview);
-      }
+      overlayHint.textContent = 'Arrastra para dibujar un rectángulo';
+
+      // Create preview rect for draw mode
+      drawPreview = document.createElement('div');
+      drawPreview.className = 'draw-rect-preview';
+      drawPreview.style.display = 'none';
+      interactionOverlay.appendChild(drawPreview);
       interactionOverlay.appendChild(overlayHint);
       container.appendChild(interactionOverlay);
 
-      // Event handlers based on mode
-      if (tool === 'click') {
-        interactionOverlay.addEventListener('click', onClickModeClick);
-      } else if (tool === 'draw') {
-        interactionOverlay.addEventListener('mousedown', onDrawStart);
-        interactionOverlay.addEventListener('mousemove', onDrawMove);
-        interactionOverlay.addEventListener('mouseup', onDrawEnd);
-        interactionOverlay.addEventListener('mouseleave', onDrawEnd);
-      }
+      // Event handlers for draw
+      interactionOverlay.addEventListener('mousedown', onDrawStart);
+      interactionOverlay.addEventListener('mousemove', onDrawMove);
+      interactionOverlay.addEventListener('mouseup', onDrawEnd);
+      interactionOverlay.addEventListener('mouseleave', onDrawEnd);
 
       // Hide hint after first interaction
       interactionOverlay.addEventListener('mousedown', function () {
@@ -2222,23 +2232,37 @@
       }, { once: true });
     }
 
-    // ---- CLICK MODE HANDLER ----
-    function onClickModeClick(e) {
-      if (!documentFullText) {
-        alert('Primero carga un PDF y ejecuta "Detectar datos sensibles"');
+    // ---- CLICK MODE: Capture text selection ----
+    function onCaptureSelection() {
+      var selection = window.getSelection();
+      var selectedText = selection ? selection.toString().trim() : '';
+
+      if (!selectedText) {
+        alert('No hay texto seleccionado. Selecciona texto en el PDF primero.');
         return;
       }
 
-      // Prompt user for text to redact
-      var text = prompt('Introduce el texto exacto a censurar:');
-      if (!text || !text.trim()) return;
+      // Verify text exists in document (optional validation)
+      if (documentFullText && !documentFullText.toLowerCase().includes(selectedText.toLowerCase())) {
+        // Text might be from PDF viewer which we can't access, add anyway
+        console.warn('Selected text not found in extracted text, adding anyway');
+      }
 
-      // Verify text exists in document
-      if (documentFullText.toLowerCase().includes(text.toLowerCase())) {
-        addManualRedaction({ type: 'text', value: text.trim(), label: 'Click manual' });
-        alert('Texto "' + text.trim() + '" añadido a la lista de redacciones.');
-      } else {
-        alert('El texto "' + text + '" no se encontró en el documento.');
+      addManualRedaction({ type: 'text', value: selectedText, label: 'Selección manual' });
+
+      // Clear selection
+      if (selection) selection.removeAllRanges();
+
+      // Visual feedback
+      var btn = document.getElementById('capture-selection-btn');
+      if (btn) {
+        var orig = btn.textContent;
+        btn.textContent = '✓ Añadido!';
+        btn.style.background = '#22c55e';
+        setTimeout(function () {
+          btn.textContent = orig;
+          btn.style.background = 'white';
+        }, 1500);
       }
     }
 
