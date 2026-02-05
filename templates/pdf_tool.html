@@ -606,18 +606,27 @@
     cursor: pointer;
   }
 
-  .draw-overlay {
+  .draw-overlay,
+  .click-overlay {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 10;
+    z-index: 9999;
+    background: transparent;
   }
 
-  .draw-overlay.active {
+  .draw-overlay.active,
+  .click-overlay.active {
     pointer-events: auto;
+    cursor: crosshair;
+  }
+
+  .click-overlay.active {
+    cursor: pointer;
+    background: rgba(59, 130, 246, 0.05);
   }
 
   .draw-rect-preview {
@@ -625,6 +634,31 @@
     border: 2px dashed #ef4444;
     background: rgba(239, 68, 68, 0.2);
     pointer-events: none;
+  }
+
+  /* Hint text for overlays */
+  .overlay-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    pointer-events: none;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
   }
 </style>
 <script>
@@ -2087,11 +2121,84 @@
         if (tool === 'draw') container.classList.add('draw-mode');
       }
 
-      // Manage draw overlay
-      manageDrawOverlay(tool === 'draw');
+      // Manage overlays for click and draw modes
+      manageInteractionOverlay(tool);
 
       // Re-init lucide icons
       if (window.lucide) window.lucide.createIcons();
+    }
+
+    // ---- UNIFIED INTERACTION OVERLAY ----
+    var interactionOverlay = null;
+    var overlayHint = null;
+
+    function manageInteractionOverlay(tool) {
+      // Remove existing overlay
+      if (interactionOverlay) {
+        interactionOverlay.remove();
+        interactionOverlay = null;
+        overlayHint = null;
+        drawPreview = null;
+      }
+
+      if (!tool || tool === 'search') return;
+      if (!container) return;
+
+      // Create overlay
+      interactionOverlay = document.createElement('div');
+      interactionOverlay.className = (tool === 'click' ? 'click-overlay' : 'draw-overlay') + ' active';
+      interactionOverlay.id = 'interaction-overlay';
+
+      // Add hint
+      overlayHint = document.createElement('div');
+      overlayHint.className = 'overlay-hint';
+      if (tool === 'click') {
+        overlayHint.textContent = 'Haz click para censurar texto';
+      } else if (tool === 'draw') {
+        overlayHint.textContent = 'Arrastra para dibujar un rectángulo';
+        // Create preview rect for draw mode
+        drawPreview = document.createElement('div');
+        drawPreview.className = 'draw-rect-preview';
+        drawPreview.style.display = 'none';
+        interactionOverlay.appendChild(drawPreview);
+      }
+      interactionOverlay.appendChild(overlayHint);
+      container.appendChild(interactionOverlay);
+
+      // Event handlers based on mode
+      if (tool === 'click') {
+        interactionOverlay.addEventListener('click', onClickModeClick);
+      } else if (tool === 'draw') {
+        interactionOverlay.addEventListener('mousedown', onDrawStart);
+        interactionOverlay.addEventListener('mousemove', onDrawMove);
+        interactionOverlay.addEventListener('mouseup', onDrawEnd);
+        interactionOverlay.addEventListener('mouseleave', onDrawEnd);
+      }
+
+      // Hide hint after first interaction
+      interactionOverlay.addEventListener('mousedown', function () {
+        if (overlayHint) overlayHint.style.display = 'none';
+      }, { once: true });
+    }
+
+    // ---- CLICK MODE HANDLER ----
+    function onClickModeClick(e) {
+      if (!documentFullText) {
+        alert('Primero carga un PDF y ejecuta "Detectar datos sensibles"');
+        return;
+      }
+
+      // Prompt user for text to redact
+      var text = prompt('Introduce el texto exacto a censurar:');
+      if (!text || !text.trim()) return;
+
+      // Verify text exists in document
+      if (documentFullText.toLowerCase().includes(text.toLowerCase())) {
+        addManualRedaction({ type: 'text', value: text.trim(), label: 'Click manual' });
+        alert('Texto "' + text.trim() + '" añadido a la lista de redacciones.');
+      } else {
+        alert('El texto "' + text + '" no se encontró en el documento.');
+      }
     }
 
     // ---- SEARCH MODE ----
@@ -2171,64 +2278,12 @@
       });
     }
 
-    // ---- CLICK MODE ----
-    // For click mode, we need to intercept clicks on the PDF viewer
-    // Since we're using native PDF viewer (object tag), we need a different approach
-    // We'll add an overlay or use the existing text content from pdf.js
-
-    if (container) {
-      container.addEventListener('click', function (e) {
-        if (currentTool !== 'click') return;
-        if (!currentPdfDoc || !documentFullText) {
-          alert('Primero carga un PDF');
-          return;
-        }
-
-        // Prompt user for text to redact (simple approach for native viewer)
-        var text = prompt('Introduce el texto exacto a censurar:');
-        if (!text || !text.trim()) return;
-
-        // Verify text exists in document
-        if (documentFullText.toLowerCase().includes(text.toLowerCase())) {
-          addManualRedaction({ type: 'text', value: text.trim(), label: 'Click manual' });
-        } else {
-          alert('El texto "' + text + '" no se encontró en el documento.');
-        }
-      });
-    }
-
-    // ---- DRAW MODE ----
-    var drawOverlay = null;
+    // ---- DRAW MODE HANDLERS ----
     var drawPreview = null;
 
-    function manageDrawOverlay(active) {
-      if (active && !drawOverlay && container) {
-        // Create overlay
-        drawOverlay = document.createElement('div');
-        drawOverlay.className = 'draw-overlay active';
-        drawOverlay.id = 'draw-overlay';
-        container.appendChild(drawOverlay);
-
-        drawPreview = document.createElement('div');
-        drawPreview.className = 'draw-rect-preview';
-        drawPreview.style.display = 'none';
-        drawOverlay.appendChild(drawPreview);
-
-        // Mouse events
-        drawOverlay.addEventListener('mousedown', onDrawStart);
-        drawOverlay.addEventListener('mousemove', onDrawMove);
-        drawOverlay.addEventListener('mouseup', onDrawEnd);
-        drawOverlay.addEventListener('mouseleave', onDrawEnd);
-      } else if (!active && drawOverlay) {
-        drawOverlay.remove();
-        drawOverlay = null;
-        drawPreview = null;
-      }
-    }
-
     function onDrawStart(e) {
-      if (!drawOverlay) return;
-      var rect = drawOverlay.getBoundingClientRect();
+      if (!interactionOverlay) return;
+      var rect = interactionOverlay.getBoundingClientRect();
       drawState.isDrawing = true;
       drawState.startX = e.clientX - rect.left;
       drawState.startY = e.clientY - rect.top;
@@ -2242,8 +2297,8 @@
     }
 
     function onDrawMove(e) {
-      if (!drawState.isDrawing || !drawOverlay || !drawPreview) return;
-      var rect = drawOverlay.getBoundingClientRect();
+      if (!drawState.isDrawing || !interactionOverlay || !drawPreview) return;
+      var rect = interactionOverlay.getBoundingClientRect();
       var currentX = e.clientX - rect.left;
       var currentY = e.clientY - rect.top;
 
@@ -2259,7 +2314,7 @@
     }
 
     function onDrawEnd(e) {
-      if (!drawState.isDrawing || !drawOverlay) return;
+      if (!drawState.isDrawing || !interactionOverlay) return;
       drawState.isDrawing = false;
 
       if (drawPreview) {
