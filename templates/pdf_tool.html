@@ -2189,16 +2189,56 @@
       if (!tool || tool === 'search') return;
       if (!container) return;
 
-      // For CLICK mode: show a floating panel with instructions, don't block PDF
+      // For CLICK mode: show a floating panel with text input
       if (tool === 'click') {
         var clickPanel = document.createElement('div');
         clickPanel.id = 'click-capture-panel';
-        clickPanel.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(59,130,246,0.95);color:white;padding:12px 20px;border-radius:8px;font-size:13px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
-        clickPanel.innerHTML = '<span>📝 Selecciona texto en el PDF, luego pulsa:</span><button type="button" id="capture-selection-btn" style="background:white;color:#3b82f6;border:none;padding:6px 14px;border-radius:6px;font-weight:600;cursor:pointer;">Añadir selección</button>';
+        clickPanel.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(30,41,59,0.98);color:white;padding:14px 20px;border-radius:10px;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,0.4);border:1px solid #475569;';
+        clickPanel.innerHTML = '' +
+          '<div style="margin-bottom:10px;font-weight:600;display:flex;align-items:center;gap:8px;">' +
+          '  <span style="font-size:18px;">✏️</span> Añadir texto a censurar' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;">' +
+          '  <input type="text" id="click-text-input" placeholder="Escribe o pega el texto aquí..." style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:white;font-size:13px;min-width:250px;">' +
+          '  <button type="button" id="click-add-btn" style="background:#3b82f6;color:white;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer;white-space:nowrap;">Añadir</button>' +
+          '</div>' +
+          '<div style="margin-top:8px;font-size:11px;color:#94a3b8;">💡 Copia texto del PDF (Ctrl+C) y pégalo aquí (Ctrl+V)</div>';
         container.appendChild(clickPanel);
 
-        // Capture selection button handler
-        document.getElementById('capture-selection-btn').addEventListener('click', onCaptureSelection);
+        // Add button handler
+        var addBtn = document.getElementById('click-add-btn');
+        var textInput = document.getElementById('click-text-input');
+
+        addBtn.addEventListener('click', function () {
+          addTextFromInput();
+        });
+
+        textInput.addEventListener('keypress', function (e) {
+          if (e.key === 'Enter') addTextFromInput();
+        });
+
+        function addTextFromInput() {
+          var text = textInput.value.trim();
+          if (!text) {
+            alert('Escribe o pega el texto que quieres censurar.');
+            return;
+          }
+
+          addManualRedaction({ type: 'text', value: text, label: 'Manual' });
+          textInput.value = '';
+          textInput.focus();
+
+          // Visual feedback
+          addBtn.textContent = '✓ Añadido!';
+          addBtn.style.background = '#22c55e';
+          setTimeout(function () {
+            addBtn.textContent = 'Añadir';
+            addBtn.style.background = '#3b82f6';
+          }, 1000);
+        }
+
+        // Focus input
+        setTimeout(function () { textInput.focus(); }, 100);
         return;
       }
 
