@@ -68,12 +68,11 @@ def validate_and_repair_json(json_str, schema, retry_count=1):
                 client = openai.Client() 
                 repair_prompt = f"Fix this JSON to match schema. Respond ONLY with valid JSON.\nError: {str(e)}\nJSON:\n{json_str}"
                 completion = client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-5-mini",
                     messages=[
                         {"role": "system", "content": "You are a JSON repair tool. Output only valid JSON matching the schema."},
                         {"role": "user", "content": repair_prompt}
-                    ],
-                    temperature=0
+                    ]
                 )
                 fixed_str = completion.choices[0].message.content
                 if "```json" in fixed_str:
@@ -1059,7 +1058,7 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         raise RuntimeError(f"Dependencia openai no disponible: {exc}") from exc
 
     client = OpenAI(api_key=api_key)
-    model = os.environ.get("PDF_AI_MODEL", "gpt-4o-mini")
+    model = os.environ.get("PDF_AI_MODEL", "gpt-5-mini")
     try:
         max_tokens = int(os.environ.get("PDF_AI_MAX_OUTPUT_TOKENS", "1500"))
     except ValueError:
@@ -1254,8 +1253,7 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
         request_kwargs = {
             "model": model,
             "messages": messages,
-            "temperature": 0,
-            "max_tokens": max_tokens,
+            "max_completion_tokens": max_tokens,
         }
         if supports_response_format:
             request_kwargs["response_format"] = response_format
