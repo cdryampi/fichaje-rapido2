@@ -1060,10 +1060,10 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
     client = OpenAI(api_key=api_key)
     model = os.environ.get("PDF_AI_MODEL", "gpt-5-mini")
     try:
-        max_tokens = int(os.environ.get("PDF_AI_MAX_OUTPUT_TOKENS", "1500"))
+        max_tokens = int(os.environ.get("PDF_AI_MAX_OUTPUT_TOKENS", "4000"))
     except ValueError:
-        max_tokens = 1500
-    max_tokens = max(300, min(max_tokens, 10_000))
+        max_tokens = 4000
+    max_tokens = max(300, min(max_tokens, 16_000))
     try:
         chunk_size = int(os.environ.get("PDF_AI_CANDIDATES_PER_CALL", "50"))
     except ValueError:
