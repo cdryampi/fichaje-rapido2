@@ -1538,6 +1538,8 @@ RESPUESTA: Solo JSON válido:
         "timestamp": datetime.now().isoformat(),
         "model": model,
         "text_length": len(text),
+        "input_system": system_prompt,
+        "input_user": user_prompt[:500] + "..." if len(user_prompt) > 500 else user_prompt,
         "output_raw": None,
         "error": None
     }
