@@ -1303,10 +1303,17 @@ def _ai_classify_sensitive(text: str, candidates: list[dict]):
             raise RuntimeError(f"Fallo al invocar al modelo {model}: {exc}") from exc
 
         trace_entry["output_raw"] = content
+        trace_entry["finish_reason"] = choice.finish_reason if choice else None
         debug_traces.append(trace_entry)
 
         if not content:
-             raise ValueError("empty content")
+            # Log detailed info to help diagnose empty responses
+            app.logger.error(
+                f"Empty content from model {model}. "
+                f"finish_reason={choice.finish_reason if choice else 'N/A'}, "
+                f"response={response}"
+            )
+            raise RuntimeError(f"El modelo {model} devolvió una respuesta vacía (finish_reason: {choice.finish_reason if choice else 'N/A'})")
 
         parsed = validate_and_repair_json(content, PII_SCHEMA)
         if "error" in parsed:
