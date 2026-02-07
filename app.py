@@ -1489,8 +1489,11 @@ def api_pdf_analyze():
     try:
         result = _ai_classify_sensitive(text, candidates)
     except RuntimeError as exc:
-        app.logger.warning("AI classification failed: %s", exc)
+        app.logger.warning("AI classification failed (RuntimeError): %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 503
+    except Exception as exc:
+        app.logger.error("AI classification failed (unexpected): %s", exc, exc_info=True)
+        return jsonify({"ok": False, "error": f"Error inesperado: {type(exc).__name__}: {str(exc)}"}), 500
     return jsonify({"ok": True, **result})
 
 
