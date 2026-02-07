@@ -1508,15 +1508,16 @@ TAREA: Analiza el texto del documento y encuentra TODOS los datos personales sen
 
 BUSCAR:
 - Nombres completos de personas (no empresas)
-- DNI/NIE/Pasaporte
-- Direcciones postales completas
-- Teléfonos (fijos y móviles)
+- DNI/NIE/Pasaporte (ej: 12345678A, X1234567B)
+- Direcciones postales completas (calle, número, piso, código postal, ciudad)
+- Teléfonos (fijos y móviles, ej: 612345678, 934567890)
 - Emails personales
 - Fechas de nacimiento
-- Cuentas bancarias / IBAN
-- Datos de salud (diagnósticos, historiales clínicos)
-- Datos financieros (ingresos, deudas, embargos)
-- Números de Seguridad Social
+- IBAN y cuentas bancarias (ej: ES12 3456 7890 1234 5678 9012)
+- Números de cuenta (CCC, código cuenta cliente)
+- Datos de salud (diagnósticos, historiales clínicos, nº historia clínica)
+- Datos financieros (ingresos, deudas, embargos, nóminas)
+- Números de Seguridad Social / NAF
 
 REGLAS:
 - Ante la duda, incluir el dato
