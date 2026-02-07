@@ -1485,24 +1485,125 @@ def api_pdf_redact():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+def _ai_extract_sensitive(text: str):
+    """
+    Simplified: sends text directly to AI to find all sensitive data.
+    No regex pre-filtering, no candidate lists.
+    """
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY no configurada en el servidor.")
+    try:
+        from openai import OpenAI
+    except Exception as exc:
+        raise RuntimeError(f"Dependencia openai no disponible: {exc}") from exc
+
+    client = OpenAI(api_key=api_key)
+    model = os.environ.get("PDF_AI_MODEL", "gpt-4o-mini")
+    
+    # Simplified system prompt (~300 tokens instead of ~900)
+    system_prompt = """Eres un DPO (Oficial de Protección de Datos) especializado en RGPD.
+
+TAREA: Analiza el texto del documento y encuentra TODOS los datos personales sensibles.
+
+BUSCAR:
+- Nombres completos de personas (no empresas)
+- DNI/NIE/Pasaporte
+- Direcciones postales completas
+- Teléfonos (fijos y móviles)
+- Emails personales
+- Fechas de nacimiento
+- Cuentas bancarias / IBAN
+- Datos de salud (diagnósticos, historiales clínicos)
+- Datos financieros (ingresos, deudas, embargos)
+- Números de Seguridad Social
+
+REGLAS:
+- Ante la duda, incluir el dato
+- Incluir TODAS las ocurrencias (aunque se repitan)
+- NO incluir nombres de empresas u organismos públicos
+
+RESPUESTA: Solo JSON válido:
+{"sensitive": [{"label": "tipo", "value": "dato exacto", "reason": "explicación"}]}"""
+
+    # Truncate text if too long
+    max_text_length = int(os.environ.get("PDF_AI_MAX_TEXT", "8000"))
+    truncated_text = text[:max_text_length] if len(text) > max_text_length else text
+    if len(text) > max_text_length:
+        truncated_text += "\n... [TEXTO TRUNCADO]"
+    
+    user_prompt = f"Analiza este documento:\n\n{truncated_text}"
+    
+    debug_trace = {
+        "timestamp": datetime.now().isoformat(),
+        "model": model,
+        "text_length": len(text),
+        "output_raw": None,
+        "error": None
+    }
+    
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0,
+            max_tokens=4000,
+            response_format={"type": "json_object"}
+        )
+        content = response.choices[0].message.content
+        debug_trace["output_raw"] = content
+        
+        if not content:
+            raise RuntimeError("El modelo devolvió una respuesta vacía")
+        
+        data = json.loads(content)
+        sensitive = data.get("sensitive", [])
+        
+        # Ensure required fields
+        for item in sensitive:
+            if "label" not in item:
+                item["label"] = "Dato sensible"
+            if "reason" not in item:
+                item["reason"] = "Dato personal identificado"
+            if "confidence" not in item:
+                item["confidence"] = "high"
+        
+        return {
+            "sensitive": sensitive,
+            "non_sensitive": [],
+            "model": model,
+            "debug": [debug_trace]
+        }
+        
+    except json.JSONDecodeError as e:
+        debug_trace["error"] = f"JSON inválido: {e}"
+        raise RuntimeError(f"Respuesta JSON inválida del modelo: {e}") from e
+    except Exception as exc:
+        debug_trace["error"] = str(exc)
+        raise RuntimeError(f"Error al analizar con IA: {exc}") from exc
+
+
 @app.route("/api/pdf/analyze", methods=["POST"])
 @login_required
 def api_pdf_analyze():
     payload = request.get_json(silent=True) or {}
     text = (payload.get("text") or "").strip()
-    candidates = _sanitize_candidate_list(payload.get("candidates"))
+    
     if not text:
         return jsonify({"ok": False, "error": "El texto del PDF es obligatorio."}), 400
-    if not candidates:
-        return jsonify({"ok": True, "sensitive": [], "non_sensitive": [], "model": None})
+    
     try:
-        result = _ai_classify_sensitive(text, candidates)
+        result = _ai_extract_sensitive(text)
     except RuntimeError as exc:
-        app.logger.warning("AI classification failed (RuntimeError): %s", exc)
+        app.logger.warning("AI extraction failed: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 503
     except Exception as exc:
-        app.logger.error("AI classification failed (unexpected): %s", exc, exc_info=True)
+        app.logger.error("AI extraction failed (unexpected): %s", exc, exc_info=True)
         return jsonify({"ok": False, "error": f"Error inesperado: {type(exc).__name__}: {str(exc)}"}), 500
+    
     return jsonify({"ok": True, **result})
 
 

@@ -1201,10 +1201,10 @@
     window.addEventListener("beforeunload", destroyCurrentPdf);
 
     function processSensitiveData(fullText) {
-      var groups = collectCandidateGroups(fullText);
-      if (!groups.length) {
-        detectionSummary.textContent = "No se detectaron patrones sensibles evidentes.";
-        detectionList.innerHTML = '<li class="detection-empty">Sin coincidencias.</li>';
+      // Simplified: send text directly to AI without regex pre-filtering
+      if (!fullText || !fullText.trim()) {
+        detectionSummary.textContent = "No hay texto para analizar.";
+        detectionList.innerHTML = '<li class="detection-empty">Sin texto.</li>';
         applyHighlights(null);
         activeRedactions = [];
         clearSelections();
@@ -1213,9 +1213,11 @@
         obfuscateButton.disabled = true;
         return Promise.resolve();
       }
-      detectionSummary.textContent = "Validando coincidencias con IA...";
-      detectionList.innerHTML = '<li class="detection-empty">Esperando validacion de IA...</li>';
-      return callAiValidation(fullText, groups)
+
+      detectionSummary.textContent = "Analizando documento con IA...";
+      detectionList.innerHTML = '<li class="detection-empty">Esperando respuesta de IA...</li>';
+
+      return callAiValidation(fullText)
         .then(function (aiData) {
           if (aiData && aiData.debug) {
             showDebugInfo(aiData.debug);
@@ -1232,13 +1234,13 @@
               return acc + (item.entries ? item.entries.length : 0);
             }, 0);
             var note = aiData.model ? " (modelo " + aiData.model + ")" : "";
-            detectionSummary.textContent = "La IA confirmo " + total + " posible(s) dato(s) sensible(s)" + note + ".";
+            detectionSummary.textContent = "La IA encontro " + total + " dato(s) sensible(s)" + note + ".";
             detectionSummary.dataset.baseMessage = detectionSummary.textContent;
             applyHighlights(grouped, { redactionTerms: [] });
             return;
           }
           detectionSummary.textContent = "La IA no identifico datos sensibles en el documento.";
-          detectionList.innerHTML = '<li class="detection-empty">Sin coincidencias confirmadas por IA.</li>';
+          detectionList.innerHTML = '<li class="detection-empty">Sin datos sensibles encontrados.</li>';
           activeRedactions = [];
           clearSelections();
           showSelectAllControls(false);
@@ -1247,30 +1249,17 @@
         })
         .catch(function (err) {
           console.error(err);
-          detectionSummary.textContent = "Fallo la validacion con IA (" + err.message + "). Se muestran coincidencias basicas.";
-          detectionSummary.dataset.baseMessage = detectionSummary.textContent;
-          prepareSelectionState(groups);
-          renderResultsList(groups, detectionList, { showReason: false, withSelection: true });
-          updateSelectAllUi();
-          showSelectAllControls(true);
-          obfuscateButton.disabled = false;
+          detectionSummary.textContent = "Error al analizar con IA: " + err.message;
+          detectionList.innerHTML = '<li class="detection-empty">Error en el analisis.</li>';
           activeRedactions = [];
-          applyHighlights(groups, { redactionTerms: [] });
+          clearSelections();
+          showSelectAllControls(false);
+          obfuscateButton.disabled = true;
         });
     }
 
-    function callAiValidation(fullText, groups) {
-      var flattened = [];
-      groups.forEach(function (group) {
-        if (!group || !group.entries) { return; }
-        group.entries.forEach(function (entry) {
-          if (!entry || !entry.value) { return; }
-          flattened.push({ label: group.label, value: entry.value });
-        });
-      });
-      if (!flattened.length) {
-        return Promise.resolve({ sensitive: [] });
-      }
+    function callAiValidation(fullText) {
+      // Simplified: just send the text, AI will find all sensitive data
       var headers = { "Content-Type": "application/json" };
       var token = getCsrfToken();
       if (token) {
@@ -1280,13 +1269,9 @@
         method: "POST",
         credentials: "same-origin",
         headers: headers,
-        body: JSON.stringify({
-          text: fullText,
-          candidates: flattened
-        })
+        body: JSON.stringify({ text: fullText })
       }).then(function (response) {
         return response.text().then(function (bodyText) {
-          // Log response to console and debug panel
           console.log("API Status:", response.status);
           console.log("API Response:", bodyText);
 
@@ -1296,7 +1281,6 @@
           if (debugContainer && debugContent) {
             debugContainer.style.display = 'block';
             debugContent.textContent = "=== API Response ===\nStatus: " + response.status +
-              "\nContent-Type: " + (response.headers.get("content-type") || "unknown") +
               "\n\n=== Body ===\n" + bodyText.substring(0, 2000);
           }
 
@@ -1305,8 +1289,8 @@
             try {
               data = JSON.parse(bodyText);
             } catch (err) {
-              console.error("JSON Parse failed. Raw response:", bodyText);
-              throw new Error("No se pudo interpretar la respuesta del analizador. Ver panel de depuración.");
+              console.error("JSON Parse failed:", bodyText);
+              throw new Error("Respuesta invalida del servidor.");
             }
           }
           if (!response.ok || !data.ok) {
