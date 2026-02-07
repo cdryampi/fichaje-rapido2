@@ -1286,12 +1286,27 @@
         })
       }).then(function (response) {
         return response.text().then(function (bodyText) {
+          // Log response to console and debug panel
+          console.log("API Status:", response.status);
+          console.log("API Response:", bodyText);
+
+          // Show in debug panel
+          var debugContainer = document.querySelector('[data-debug-container]');
+          var debugContent = document.querySelector('[data-debug-content]');
+          if (debugContainer && debugContent) {
+            debugContainer.style.display = 'block';
+            debugContent.textContent = "=== API Response ===\nStatus: " + response.status +
+              "\nContent-Type: " + (response.headers.get("content-type") || "unknown") +
+              "\n\n=== Body ===\n" + bodyText.substring(0, 2000);
+          }
+
           var data = {};
           if (bodyText) {
             try {
               data = JSON.parse(bodyText);
             } catch (err) {
-              throw new Error("No se pudo interpretar la respuesta del analizador.");
+              console.error("JSON Parse failed. Raw response:", bodyText);
+              throw new Error("No se pudo interpretar la respuesta del analizador. Ver panel de depuración.");
             }
           }
           if (!response.ok || !data.ok) {
