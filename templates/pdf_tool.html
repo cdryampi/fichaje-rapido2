@@ -24,10 +24,11 @@
 
   <div class="nav-group">
     <span class="nav-label">Redaction preview</span>
-    <select class="nav-select" id="preview-mode-select">
-      <option value="original">Original</option>
-      <option value="redacted">Redacted</option>
-    </select>
+    <label class="toggle-switch">
+      <input type="checkbox" id="preview-mode-toggle">
+      <span class="slider round"></span>
+    </label>
+    <span class="nav-label-status" id="preview-status">Original</span>
   </div>
 
   <button type="button" class="btn-auto" id="nav-auto-btn">
@@ -797,6 +798,63 @@
     padding: 6px;
     border-radius: 6px;
     font-size: 13px;
+    display: none;
+    /* Hide old select style if any usage remains */
+  }
+
+  /* Toggle Switch */
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    margin-left: 4px;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #475569;
+    transition: .4s;
+    border-radius: 34px;
+  }
+
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+  }
+
+  input:checked+.slider {
+    background-color: #a78bfa;
+    /* Lilac */
+  }
+
+  input:checked+.slider:before {
+    transform: translateX(19px);
+  }
+
+  .nav-label-status {
+    font-size: 13px;
+    color: #cbd5e1;
+    margin-left: 8px;
+    min-width: 60px;
   }
 
   .btn-auto {
@@ -1092,19 +1150,23 @@
     // Se usa para almacenar el blob de previsualización (censurado)
     var currentRedactedBlobUrl = null;
 
-    // Preview Mode Select Logic
-    var previewSelect = document.getElementById("preview-mode-select");
-    if (previewSelect) {
-      previewSelect.addEventListener("change", function () {
-        var mode = previewSelect.value;
-        if (mode === 'original') {
+    // Preview Mode Toggle Logic
+    var previewToggle = document.getElementById("preview-mode-toggle");
+    var previewStatus = document.getElementById("preview-status");
+
+    if (previewToggle) {
+      previewToggle.addEventListener("change", function () {
+        var isRedacted = previewToggle.checked;
+        if (previewStatus) previewStatus.textContent = isRedacted ? "Redacted" : "Original";
+
+        if (!isRedacted) {
           // Restore original view
           if (currentPdfBytes && nativeViewer) {
             var blob = new Blob([currentPdfBytes], { type: 'application/pdf' });
             var url = URL.createObjectURL(blob);
             nativeViewer.data = url;
           }
-        } else if (mode === 'redacted') {
+        } else {
           // Generate and show redacted view
           updateRedactedPreview();
         }
@@ -1120,7 +1182,10 @@
       // GENERAR PREVIEW
       if (!currentPdfBytes) {
         alert("No hay PDF cargado.");
-        if (previewSelect) previewSelect.value = 'original';
+        if (previewToggle) {
+          previewToggle.checked = false;
+          if (previewStatus) previewStatus.textContent = "Original";
+        }
         return;
       }
 
