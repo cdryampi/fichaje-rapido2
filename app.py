@@ -1501,31 +1501,57 @@ def _ai_extract_sensitive(text: str):
     client = OpenAI(api_key=api_key)
     model = os.environ.get("PDF_AI_MODEL", "gpt-4o-mini")
     
-    # Simplified system prompt (~300 tokens instead of ~900)
-    system_prompt = """Eres un DPO (Oficial de Protección de Datos) especializado en RGPD.
+    # System prompt focused on high recall for PDF redaction
+    system_prompt = """Eres un DPO experto en RGPD/LOPDGDD. Tu objetivo es MAXIMIZAR RECALL: detectar todos los datos personales que deben censurarse en un PDF.
 
-TAREA: Analiza el texto del documento y encuentra TODOS los datos personales sensibles.
+ENTORNO DE USO
+Este aviso se utiliza en un SAAS: el usuario sube un archivo PDF, el sistema extrae el texto del PDF y lo manda a la API de OpenAI usando este aviso. La API devuelve los datos sensibles encontrados. Al pulsar otro botón, esos datos se ofuscan/censuran y se guarda un nuevo PDF.
 
-BUSCAR:
-- Nombres completos de personas (no empresas)
-- DNI/NIE/Pasaporte (ej: 12345678A, X1234567B)
-- Direcciones postales completas (calle, número, piso, código postal, ciudad)
-- Teléfonos (fijos y móviles, ej: 612345678, 934567890)
-- Emails personales
-- Fechas de nacimiento
-- IBAN y cuentas bancarias (ej: ES12 3456 7890 1234 5678 9012)
-- Números de cuenta (CCC, código cuenta cliente)
-- Datos de salud (diagnósticos, historiales clínicos, nº historia clínica)
-- Datos financieros (ingresos, deudas, embargos, nóminas)
-- Números de Seguridad Social / NAF
+TAREA
+Analiza el texto y devuelve datos personales sensibles para redacción.
 
-REGLAS:
-- Ante la duda, incluir el dato
-- Incluir TODAS las ocurrencias (aunque se repitan)
-- NO incluir nombres de empresas u organismos públicos
+REGLA CRITICA SOBRE NOMBRES
+- Considera sensible:
+  - Nombre solo (ej. "Laura") cuando identifique a una persona física en contexto documental.
+  - Nombre + 1 apellido (ej. "Laura Gómez") SIEMPRE.
+  - Nombre + 2 apellidos (ej. "Laura Gómez Ruiz") SIEMPRE.
+  - Tratamientos + nombre/apellido (Sr., Sra., Dr., Dra., Don, Doña, paciente, trabajador, etc.).
+- NO exijas 2 apellidos para marcarlo como sensible.
+- Si hay duda razonable de si es nombre de persona, inclúyelo con confidence="medium".
 
-RESPUESTA: Solo JSON válido:
-{"sensitive": [{"label": "tipo", "value": "dato exacto", "reason": "explicación"}]}"""
+OTROS DATOS A DETECTAR
+- Identificador (DNI/NIE/Pasaporte, ID nacional o equivalente)
+- Seguridad Social / NAF
+- Dirección postal
+- Teléfono
+- Email personal
+- Fecha de nacimiento
+- IBAN / cuentas bancarias
+- Datos de salud
+- Datos financieros
+- Datos legales/judiciales personales
+
+EXCLUSIONES
+- No marcar como dato personal nombres de empresas u organismos (S.L., S.A., Ayuntamiento, Ministerio, etc.), salvo autónomo claramente identificable como persona física.
+
+FORMATO DE SALIDA (OBLIGATORIO)
+Devuelve SOLO un JSON válido con este formato exacto:
+{
+  "sensitive": [
+    {
+      "label": "Nombre persona|Identificador|Direccion|Telefono|Email|Fecha nacimiento|IBAN/Cuenta|Seguridad Social/NAF|Salud|Financiero|Legal/Judicial|Otro dato personal",
+      "value": "texto exacto del documento",
+      "reason": "motivo breve",
+      "confidence": "high|medium|low"
+    }
+  ]
+}
+
+REGLAS DE CALIDAD
+- "value" debe ser literal exacto del texto, sin inventar ni normalizar.
+- No incluyas contexto largo; solo el dato.
+- Incluye TODAS las ocurrencias, incluso entradas idénticas.
+- Si no hay datos, responde: {"sensitive":[]}"""
 
     # Truncate text if too long
     max_text_length = int(os.environ.get("PDF_AI_MAX_TEXT", "8000"))
