@@ -907,8 +907,8 @@
 
   /* Search Popup Styles */
   .search-redact-popup {
-    position: absolute;
-    z-index: 10000;
+    position: fixed;
+    z-index: 100000;
     background: #1e293b;
     border: 1px solid #334155;
     border-radius: 12px;
@@ -3096,10 +3096,13 @@
 
     if (navSearchBtn) {
       navSearchBtn.addEventListener("click", function (e) {
+        console.log("Search & Redact button clicked");
         e.preventDefault();
         e.stopPropagation();
         toggleSearchRedactPopup();
       });
+    } else {
+      console.error("Search & Redact button not found");
     }
 
     function toggleSearchRedactPopup() {
@@ -3124,8 +3127,8 @@
       var scrollX = window.scrollX || window.pageXOffset;
       var scrollY = window.scrollY || window.pageYOffset;
 
-      searchPopup.style.left = (rect.left + scrollX) + "px";
-      searchPopup.style.top = (rect.bottom + scrollY + 8) + "px";
+      searchPopup.style.left = rect.left + "px";
+      searchPopup.style.top = (rect.bottom + 8) + "px";
 
       // Trigger reflow
       void searchPopup.offsetWidth;
@@ -3165,7 +3168,9 @@
 
       document.body.appendChild(searchPopup);
 
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) {
+        try { window.lucide.createIcons(); } catch (e) { console.warn("Icons failed", e); }
+      }
 
       // Event handlers
       var closeBtn = searchPopup.querySelector(".popup-close");
