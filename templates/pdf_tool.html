@@ -904,6 +904,55 @@
     width: 16px;
     height: 16px;
   }
+
+  /* Search Popup Styles */
+  .search-redact-popup {
+    position: absolute;
+    z-index: 10000;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    width: 320px;
+    display: none;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.2s, transform 0.2s;
+  }
+
+  .search-redact-popup.active {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .search-redact-popup .popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    color: #e2e8f0;
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .search-redact-popup .popup-close {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .search-redact-popup .popup-close:hover {
+    background: #334155;
+    color: #f87171;
+  }
 </style>
 <script>
   (function () {
@@ -3038,6 +3087,144 @@
     if (window.lucide) {
       window.lucide.createIcons();
     }
+
+    // ============================================================
+    // SEARCH & REDACT POPUP LOGIC
+    // ============================================================
+    var navSearchBtn = document.getElementById("nav-search-btn");
+    var searchPopup = null;
+
+    if (navSearchBtn) {
+      navSearchBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleSearchRedactPopup();
+      });
+    }
+
+    function toggleSearchRedactPopup() {
+      if (!searchPopup) {
+        createSearchRedactPopup();
+      }
+
+      var isActive = searchPopup.classList.contains("active");
+      if (isActive) {
+        closeSearchPopup();
+      } else {
+        openSearchPopup();
+      }
+    }
+
+    function openSearchPopup() {
+      if (!searchPopup) return;
+      searchPopup.style.display = "block";
+
+      // Position it
+      var rect = navSearchBtn.getBoundingClientRect();
+      var scrollX = window.scrollX || window.pageXOffset;
+      var scrollY = window.scrollY || window.pageYOffset;
+
+      searchPopup.style.left = (rect.left + scrollX) + "px";
+      searchPopup.style.top = (rect.bottom + scrollY + 8) + "px";
+
+      // Trigger reflow
+      void searchPopup.offsetWidth;
+      searchPopup.classList.add("active");
+
+      var input = document.getElementById("popup-search-input");
+      if (input) {
+        setTimeout(function () { input.focus(); }, 50);
+      }
+    }
+
+    function closeSearchPopup() {
+      if (!searchPopup) return;
+      searchPopup.classList.remove("active");
+      setTimeout(function () { searchPopup.style.display = "none"; }, 200);
+    }
+
+    function createSearchRedactPopup() {
+      searchPopup = document.createElement("div");
+      searchPopup.className = "search-redact-popup";
+      searchPopup.innerHTML =
+        '<div class="popup-header">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<i data-lucide="pencil" style="width:16px;height:16px;color:#a78bfa;"></i>' +
+        '<span>Añadir texto a censurar</span>' +
+        '</div>' +
+        '<button type="button" class="popup-close"><i data-lucide="x" style="width:16px;height:16px;"></i></button>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
+        '<input type="text" id="popup-search-input" placeholder="Escribe texto..." style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:white;font-size:13px;">' +
+        '<button type="button" id="popup-add-btn" class="btn-lilac" style="padding:6px 12px;white-space:nowrap;">Añadir</button>' +
+        '</div>' +
+        '<div style="font-size:11px;color:#94a3b8;display:flex;align-items:start;gap:8px;line-height:1.4;background:rgba(255,255,255,0.03);padding:8px;border-radius:6px;">' +
+        '<i data-lucide="lightbulb" style="width:14px;height:14px;color:#fbbf24;flex-shrink:0;margin-top:2px;"></i>' +
+        '<span>Copia texto del PDF (Ctrl + C) y pégalo aquí (Ctrl + V)</span>' +
+        '</div>';
+
+      document.body.appendChild(searchPopup);
+
+      if (window.lucide) window.lucide.createIcons();
+
+      // Event handlers
+      var closeBtn = searchPopup.querySelector(".popup-close");
+      var addBtn = document.getElementById("popup-add-btn");
+      var input = document.getElementById("popup-search-input");
+
+      closeBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        closeSearchPopup();
+      });
+
+      addBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        addTextFromPopup();
+      });
+
+      input.addEventListener("keypress", function (e) {
+        if (e.key === "Enter") addTextFromPopup();
+      });
+
+      input.addEventListener("click", function (e) {
+        e.stopPropagation(); // keep popup open
+      });
+
+      searchPopup.addEventListener("click", function (e) {
+        e.stopPropagation(); // keep popup open
+      });
+
+      // Close on click outside
+      document.addEventListener("click", function (e) {
+        if (searchPopup && searchPopup.classList.contains("active") &&
+          !searchPopup.contains(e.target) &&
+          e.target !== navSearchBtn &&
+          !navSearchBtn.contains(e.target)) {
+          closeSearchPopup();
+        }
+      });
+    }
+
+    function addTextFromPopup() {
+      var input = document.getElementById("popup-search-input");
+      var text = input.value.trim();
+      if (!text) return;
+
+      addManualRedaction({ type: 'text', value: text, label: 'Manual' });
+
+      var addBtn = document.getElementById("popup-add-btn");
+      var originalText = addBtn.innerHTML;
+      addBtn.innerHTML = "✓";
+      addBtn.style.background = "#10b981"; // success green
+
+      setTimeout(function () {
+        addBtn.innerHTML = originalText;
+        addBtn.style.background = ""; // reset
+        input.value = "";
+        input.focus();
+      }, 1000);
+    }
+
   })();
 </script>
 
