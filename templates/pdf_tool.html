@@ -2625,7 +2625,8 @@
     var drawState = { isDrawing: false, startX: 0, startY: 0, currentPage: 1 };
 
     // DOM elements for manual tools
-    var manualToolbar = document.getElementById('manual-redact-toolbar');
+    // DOM elements for manual tools
+    // var manualToolbar = document.getElementById('manual-redact-toolbar'); // Removed
     var searchPanel = document.getElementById('search-panel');
     var searchInput = document.getElementById('search-input');
     var searchBtn = document.getElementById('search-btn');
@@ -2634,16 +2635,8 @@
     var manualRedactionsList = document.getElementById('manual-redactions-list');
     var clearManualBtn = document.getElementById('clear-manual-redactions');
 
-    // Initialize toolbar buttons
-    if (manualToolbar) {
-      var toolButtons = manualToolbar.querySelectorAll('.btn-tool');
-      toolButtons.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var tool = btn.getAttribute('data-tool');
-          setActiveTool(currentTool === tool ? null : tool);
-        });
-      });
-    }
+    // Initialize toolbar buttons - REMOVED
+
 
     function setActiveTool(tool) {
       currentTool = tool;
