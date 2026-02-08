@@ -463,8 +463,8 @@
     }
 
     .pdf-uploader {
-      flex: 0 0 240px;
-      max-width: 240px
+      flex: 0 0 260px;
+      max-width: 260px
     }
   }
 
@@ -2008,20 +2008,20 @@
       var showReason = !!(options && options.showReason);
       var withSelection = options && Object.prototype.hasOwnProperty.call(options, "withSelection") ? !!options.withSelection : true;
 
-      // Helper function to get color class based on label
-      function getLabelColorClass(label) {
-        if (!label) return 'type-other';
+      // Helper function to get color style based on label
+      function getLabelColorStyle(label) {
+        if (!label) return 'background: rgba(167, 139, 250, 0.15); border-color: rgba(167, 139, 250, 0.5);';
         var l = label.toLowerCase();
-        // Names
-        if (l.includes('nombre') || l.includes('name') || l.includes('apellido')) return 'type-name';
-        // IDs (DNI, NIE, Passport, etc.)
-        if (l.includes('dni') || l.includes('nie') || l.includes('pasaporte') || l.includes('passport') || l.includes('nif') || l.includes('cif') || l.includes('identificador') || l.includes('id')) return 'type-id';
-        // Dates
-        if (l.includes('fecha') || l.includes('date') || l.includes('nacimiento') || l.includes('birth')) return 'type-date';
-        // Addresses
-        if (l.includes('direccion') || l.includes('address') || l.includes('domicilio') || l.includes('calle') || l.includes('ciudad') || l.includes('provincia') || l.includes('postal')) return 'type-address';
-        // Default: other
-        return 'type-other';
+        // Names - Blue
+        if (l.includes('nombre') || l.includes('name') || l.includes('apellido')) return 'background: rgba(59, 130, 246, 0.25); border-color: rgba(59, 130, 246, 0.6);';
+        // IDs - Green
+        if (l.includes('dni') || l.includes('nie') || l.includes('pasaporte') || l.includes('passport') || l.includes('nif') || l.includes('cif') || l.includes('identificador') || l.includes('id')) return 'background: rgba(16, 185, 129, 0.25); border-color: rgba(16, 185, 129, 0.6);';
+        // Dates - Yellow
+        if (l.includes('fecha') || l.includes('date') || l.includes('nacimiento') || l.includes('birth')) return 'background: rgba(251, 191, 36, 0.25); border-color: rgba(251, 191, 36, 0.6);';
+        // Addresses - Orange
+        if (l.includes('direccion') || l.includes('address') || l.includes('domicilio') || l.includes('calle') || l.includes('ciudad') || l.includes('provincia') || l.includes('postal')) return 'background: rgba(249, 115, 22, 0.25); border-color: rgba(249, 115, 22, 0.6);';
+        // Default - Lilac
+        return 'background: rgba(167, 139, 250, 0.25); border-color: rgba(167, 139, 250, 0.6);';
       }
 
       var htmlContent = groups.map(function (group) {
@@ -2066,14 +2066,14 @@
           return '<div>' + escapeHtml(valueText) + detailHtml + '</div>';
         }).join("");
 
-        // Determine color class based on label
-        var colorClass = getLabelColorClass(group.label);
+        // Determine color style based on label
+        var colorStyle = getLabelColorStyle(group.label);
 
-        return '<li class="' + colorClass + '"><div class="detection-item">' +
+        return '<li style="' + colorStyle + '"><div class="detection-item">' +
           '<div style="display:flex;align-items:center;min-width:120px;margin-bottom:4px;">' +
           (withSelection ? '<input type="checkbox" class="group-toggle" data-group-label="' + safeLabel + '" ' + groupChecked + ' style="margin-right:6px;" title="Seleccionar/Deseleccionar grupo" />' : '') +
           '<span class="detection-tag">' + safeLabel + '</span></div>' +
-          '<div class="detection-values">' + valuesHtml + '</div></div></li>';;
+          '<div class="detection-values">' + valuesHtml + '</div></div></li>';
       }).join("");
 
       if (!htmlContent) {
