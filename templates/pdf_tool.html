@@ -2008,36 +2008,23 @@
       var showReason = !!(options && options.showReason);
       var withSelection = options && Object.prototype.hasOwnProperty.call(options, "withSelection") ? !!options.withSelection : true;
 
-      // Add Quick Selection Buttons (if not exists already)
-      if (!document.getElementById('quick-selection-controls')) {
-        var container = document.createElement('div');
-        container.id = 'quick-selection-controls';
-        container.className = 'filter-controls';
-        container.style = 'margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;';
-        container.innerHTML =
-          '<span style="font-size: 11px; margin-right: 4px; color: #94a3b8;">Selección Rápida:</span>' +
-          '<button type="button" class="btn-xs" onclick="setSelectionByConfidence([\'high\', \'medium\', \'low\'])">Todo</button>' +
-          '<button type="button" class="btn-xs" onclick="setSelectionByConfidence([\'high\'])">Solo Alta</button>' +
-          '<button type="button" class="btn-xs" onclick="setSelectionByConfidence([\'high\', \'medium\'])">Alta + Media</button>';
-        listEl.parentNode.insertBefore(container, listEl);
+      // Helper function to get color class based on label
+      function getLabelColorClass(label) {
+        if (!label) return 'type-other';
+        var l = label.toLowerCase();
+        // Names
+        if (l.includes('nombre') || l.includes('name') || l.includes('apellido')) return 'type-name';
+        // IDs (DNI, NIE, Passport, etc.)
+        if (l.includes('dni') || l.includes('nie') || l.includes('pasaporte') || l.includes('passport') || l.includes('nif') || l.includes('cif') || l.includes('identificador') || l.includes('id')) return 'type-id';
+        // Dates
+        if (l.includes('fecha') || l.includes('date') || l.includes('nacimiento') || l.includes('birth')) return 'type-date';
+        // Addresses
+        if (l.includes('direccion') || l.includes('address') || l.includes('domicilio') || l.includes('calle') || l.includes('ciudad') || l.includes('provincia') || l.includes('postal')) return 'type-address';
+        // Default: other
+        return 'type-other';
       }
 
       var htmlContent = groups.map(function (group) {
-        // Helper function to get color class based on label
-        function getLabelColorClass(label) {
-          if (!label) return 'type-other';
-          var l = label.toLowerCase();
-          // Names
-          if (l.includes('nombre') || l.includes('name') || l.includes('apellido')) return 'type-name';
-          // IDs (DNI, NIE, Passport, etc.)
-          if (l.includes('dni') || l.includes('nie') || l.includes('pasaporte') || l.includes('passport') || l.includes('nif') || l.includes('cif') || l.includes('identificador') || l.includes('id')) return 'type-id';
-          // Dates
-          if (l.includes('fecha') || l.includes('date') || l.includes('nacimiento') || l.includes('birth')) return 'type-date';
-          // Addresses
-          if (l.includes('direccion') || l.includes('address') || l.includes('domicilio') || l.includes('calle') || l.includes('ciudad') || l.includes('provincia') || l.includes('postal')) return 'type-address';
-          // Default: other
-          return 'type-other';
-        }
         var safeLabel = escapeHtml(group.label || "");
         var entries = group.entries || [];
         if (currentFilter !== 'all') {
