@@ -29,6 +29,10 @@
       <option value="draft">Draft (colores)</option>
       <option value="redacted">Censurado</option>
     </select>
+    <button type="button" id="refresh-preview-btn" class="btn-nav" style="padding:4px 8px;cursor:pointer;"
+      title="Actualizar vista previa">
+      <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i>
+    </button>
   </div>
 
   <button type="button" class="btn-auto" id="nav-auto-btn">
@@ -1201,6 +1205,14 @@
 
     if (previewModeSelect) {
       previewModeSelect.addEventListener("change", function () {
+        applyPreviewMode(previewModeSelect.value);
+      });
+    }
+
+    // Refresh button for preview
+    var refreshPreviewBtn = document.getElementById("refresh-preview-btn");
+    if (refreshPreviewBtn) {
+      refreshPreviewBtn.addEventListener("click", function () {
         applyPreviewMode(previewModeSelect.value);
       });
     }
