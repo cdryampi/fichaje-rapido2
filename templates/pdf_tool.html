@@ -1,138 +1,153 @@
 ﻿{% extends "base.html" %}
 
 {% block content %}
-<section class="pdf-page">
-  <div class="header">
-    <h2>Visor de PDF</h2>
-    <p class="muted">Sube un documento PDF y visualizalo al instante sin salir de la aplicacion.</p>
+<div class="header-bar">
+  <div class="header-branding">
+    <i data-lucide="shield-check" class="brand-icon"></i>
+    <h2 class="brand-title">Secure Redact v. 0.1.0</h2>
   </div>
-  <div class="layout">
-    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <button type="button" class="btn-lilac" id="header-upload-btn">
+    <i data-lucide="upload" class="icon-sm"></i>
+    Upload file
+  </button>
+</div>
 
-    <section class="card pdf-uploader">
-      <h3>Selecciona un archivo</h3>
-      <p class="muted">Solo se admiten archivos en formato PDF. El documento se carga de forma local en tu navegador.
-      </p>
-      <label class="file-picker">
-        <input type="file" id="pdf-file-input" accept="application/pdf" />
-        <span class="file-picker__hint">
-          <i data-lucide="file-input" class="icon"></i>
-          <span data-file-name>Selecciona un PDF desde tu equipo</span>
-        </span>
-      </label>
-      <button type="button" class="btn btn-green" id="load-pdf-button">
-        <i data-lucide="upload-cloud" class="icon"></i>
-        Cargar PDF
-      </button>
-      <button type="button" class="btn btn-yellow detect-btn" id="detect-sensitive-button">
-        <i data-lucide="shield-alert" class="icon"></i>
-        Detectar datos sensibles
-      </button>
-      <button type="button" class="btn btn-red detect-btn" id="obfuscate-sensitive-button" disabled>
-        <i data-lucide="eye-off" class="icon"></i>
-        Emborronar datos sensibles
-      </button>
-      <button type="button" class="btn btn-outline detect-btn" id="save-redacted-button" disabled
-        style="margin-top: 6px;">
-        <i data-lucide="download" class="icon"></i>
-        Guardar PDF Censurado
-      </button>
+<div class="nav-bar">
+  <button type="button" class="btn-nav" id="nav-search-btn">
+    <i data-lucide="search" class="icon-sm"></i>
+    Search & Redact
+  </button>
 
-      <!-- Toolbar de censura manual -->
-      <div class="manual-redact-toolbar" id="manual-redact-toolbar">
-        <span class="toolbar-label">Censura manual:</span>
-        <button type="button" class="btn-tool" data-tool="click" title="Click en texto para censurar">
-          <i data-lucide="mouse-pointer-click" class="icon"></i> Click
-        </button>
-        <button type="button" class="btn-tool" data-tool="search" title="Buscar texto en documento">
-          <i data-lucide="search" class="icon"></i> Buscar
-        </button>
-        <button type="button" class="btn-tool" data-tool="draw" title="Dibujar rectángulo de censura">
-          <i data-lucide="square-dashed" class="icon"></i> Dibujar
-        </button>
-      </div>
-
-      <!-- Panel de búsqueda (visible solo en modo search) -->
-      <div class="search-panel" id="search-panel" style="display:none;">
-        <div class="search-input-row">
-          <input type="text" id="search-input" placeholder="Texto a buscar..." class="search-input">
-          <button type="button" class="btn-xs btn-search" id="search-btn">Buscar</button>
-        </div>
-        <div class="search-results" id="search-results"></div>
-      </div>
-
-      <!-- Lista de redacciones manuales -->
-      <div class="manual-redactions-panel" id="manual-redactions-panel" style="display:none;">
-        <h5>Redacciones manuales</h5>
-        <ul class="manual-redactions-list" id="manual-redactions-list"></ul>
-        <button type="button" class="btn-xs btn-clear-manual" id="clear-manual-redactions">Limpiar todas</button>
-      </div>
-
-      <div class="detection-panel" data-detection-output>
-        <h4>Resultados del analisis</h4>
-        <p class="muted small" data-detection-summary>No se ha analizado ningun PDF todavia.</p>
-
-        <!-- Filters -->
-        <div class="filter-controls is-hidden" id="confidence-filters" style="margin-bottom: 8px;">
-          <span style="font-size: 11px; margin-right: 4px; color: #94a3b8;">Filtrar por confianza:</span>
-          <button type="button" class="btn-xs btn-active" data-filter="all">Todas</button>
-          <button type="button" class="btn-xs" data-filter="high">Alta</button>
-          <button type="button" class="btn-xs" data-filter="medium">Media+</button>
-        </div>
-
-        <div class="detection-controls is-hidden" data-select-all-container>
-          <label class="detection-checkbox-label">
-            <input type="checkbox" id="sensitive-select-all" />
-            <span>Seleccionar/deseleccionar todos</span>
-          </label>
-        </div>
-        <ul class="detection-list" data-detection-list></ul>
-
-        <!-- Debug Section -->
-        <details class="debug-details" data-debug-container
-          style="display: none; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">
-          <summary style="cursor: pointer; font-size: 12px; color: #94a3b8; user-select: none;">Ver depuracion AI
-          </summary>
-          <div data-debug-content
-            style="margin-top: 8px; font-family: monospace; font-size: 11px; white-space: pre-wrap; color: #cbd5e1; max-height: 300px; overflow-y: auto;">
-          </div>
-        </details>
-
-        <!-- AI Chat Section -->
-        <div class="ai-chat-section" data-chat-section
-          style="display: none; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
-          <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #e2e8f0;">
-            <span style="margin-right: 6px;">💬</span> Preguntar a la IA
-          </h4>
-          <div class="chat-messages" data-chat-messages
-            style="max-height: 200px; overflow-y: auto; margin-bottom: 12px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 8px;">
-            <p style="color: #94a3b8; font-size: 12px; margin: 0;">Pregunta a la IA sobre sus decisiones de detección...
-            </p>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <input type="text" data-chat-input placeholder="¿Por qué no detectaste...?"
-              style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px;" />
-            <button type="button" data-chat-send class="btn btn--secondary" style="padding: 8px 16px;">
-              Enviar
-            </button>
-          </div>
-        </div>
-      </div>
-      <p class="muted small">El PDF no se guarda en el servidor; se muestra solo para ti.</p>
-    </section>
-    <section class="card pdf-viewer">
-      <h3>Vista previa 2</h3>
-      <div class="pdf-viewer__frame" data-pdf-container>
-        <div class="pdf-placeholder" data-pdf-placeholder>
-          <i data-lucide="file-text" class="icon"></i>
-          <p class="muted">Sube un PDF y pulsa "Cargar PDF" para visualizarlo.</p>
-        </div>
-        <div class="pdf-renderer" data-pdf-renderer style="display:none"></div>
-        <object data="" type="application/pdf" class="pdf-native-viewer" data-pdf-native
-          style="display:none; width:100%; height:100%; border:none;"></object>
-      </div>
-    </section>
+  <div class="btn-nav file-display">
+    <span data-file-name-display>No file selected</span>
   </div>
+
+  <div class="nav-group">
+    <span class="nav-label">Redaction preview</span>
+    <select class="nav-select" id="preview-mode-select">
+      <option value="original">Original</option>
+      <option value="redacted">Redacted</option>
+    </select>
+  </div>
+
+  <button type="button" class="btn-auto" id="nav-auto-btn">
+    <i data-lucide="sparkles" class="icon-sm"></i>
+    AUTO
+  </button>
+
+  <button type="button" class="btn-green-save" id="nav-finalize-btn" disabled>
+    <i data-lucide="save" class="icon-sm"></i>
+    Finalize redaction
+  </button>
+</div>
+
+<div class="layout">
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+  <section class="card pdf-uploader">
+    <!-- Hidden controls for logic compatibility -->
+    <input type="file" id="pdf-file-input" accept="application/pdf" style="display:none" />
+    <button id="load-pdf-button" style="display:none"></button>
+    <!-- Keep for logic compatibility if needed, but we will redirect logic -->
+
+    <!-- We keep the container but clear the old visible UI -->
+
+
+    <!-- Toolbar de censura manual -->
+    <div class="manual-redact-toolbar" id="manual-redact-toolbar">
+      <span class="toolbar-label">Censura manual:</span>
+      <button type="button" class="btn-tool" data-tool="click" title="Click en texto para censurar">
+        <i data-lucide="mouse-pointer-click" class="icon"></i> Click
+      </button>
+      <button type="button" class="btn-tool" data-tool="search" title="Buscar texto en documento">
+        <i data-lucide="search" class="icon"></i> Buscar
+      </button>
+      <button type="button" class="btn-tool" data-tool="draw" title="Dibujar rectángulo de censura">
+        <i data-lucide="square-dashed" class="icon"></i> Dibujar
+      </button>
+    </div>
+
+    <!-- Panel de búsqueda (visible solo en modo search) -->
+    <div class="search-panel" id="search-panel" style="display:none;">
+      <div class="search-input-row">
+        <input type="text" id="search-input" placeholder="Texto a buscar..." class="search-input">
+        <button type="button" class="btn-xs btn-search" id="search-btn">Buscar</button>
+      </div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+
+    <!-- Lista de redacciones manuales -->
+    <div class="manual-redactions-panel" id="manual-redactions-panel" style="display:none;">
+      <h5>Redacciones manuales</h5>
+      <ul class="manual-redactions-list" id="manual-redactions-list"></ul>
+      <button type="button" class="btn-xs btn-clear-manual" id="clear-manual-redactions">Limpiar todas</button>
+    </div>
+
+    <div class="detection-panel" data-detection-output>
+      <h4>Resultados del analisis</h4>
+      <p class="muted small" data-detection-summary>No se ha analizado ningun PDF todavia.</p>
+
+      <!-- Filters -->
+      <div class="filter-controls is-hidden" id="confidence-filters" style="margin-bottom: 8px;">
+        <span style="font-size: 11px; margin-right: 4px; color: #94a3b8;">Filtrar por confianza:</span>
+        <button type="button" class="btn-xs btn-active" data-filter="all">Todas</button>
+        <button type="button" class="btn-xs" data-filter="high">Alta</button>
+        <button type="button" class="btn-xs" data-filter="medium">Media+</button>
+      </div>
+
+      <div class="detection-controls is-hidden" data-select-all-container>
+        <label class="detection-checkbox-label">
+          <input type="checkbox" id="sensitive-select-all" />
+          <span>Seleccionar/deseleccionar todos</span>
+        </label>
+      </div>
+      <ul class="detection-list" data-detection-list></ul>
+
+      <!-- Debug Section -->
+      <details class="debug-details" data-debug-container
+        style="display: none; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">
+        <summary style="cursor: pointer; font-size: 12px; color: #94a3b8; user-select: none;">Ver depuracion AI
+        </summary>
+        <div data-debug-content
+          style="margin-top: 8px; font-family: monospace; font-size: 11px; white-space: pre-wrap; color: #cbd5e1; max-height: 300px; overflow-y: auto;">
+        </div>
+      </details>
+
+      <!-- AI Chat Section -->
+      <div class="ai-chat-section" data-chat-section
+        style="display: none; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
+        <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #e2e8f0;">
+          <span style="margin-right: 6px;">💬</span> Preguntar a la IA
+        </h4>
+        <div class="chat-messages" data-chat-messages
+          style="max-height: 200px; overflow-y: auto; margin-bottom: 12px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <p style="color: #94a3b8; font-size: 12px; margin: 0;">Pregunta a la IA sobre sus decisiones de detección...
+          </p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" data-chat-input placeholder="¿Por qué no detectaste...?"
+            style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px;" />
+          <button type="button" data-chat-send class="btn btn--secondary" style="padding: 8px 16px;">
+            Enviar
+          </button>
+        </div>
+      </div>
+    </div>
+    <p class="muted small">El PDF no se guarda en el servidor; se muestra solo para ti.</p>
+  </section>
+  <section class="card pdf-viewer">
+    <h3>Vista previa 2</h3>
+    <div class="pdf-viewer__frame" data-pdf-container>
+      <div class="pdf-placeholder" data-pdf-placeholder>
+        <i data-lucide="file-text" class="icon"></i>
+        <p class="muted">Sube un PDF y pulsa "Cargar PDF" para visualizarlo.</p>
+      </div>
+      <div class="pdf-renderer" data-pdf-renderer style="display:none"></div>
+      <object data="" type="application/pdf" class="pdf-native-viewer" data-pdf-native
+        style="display:none; width:100%; height:100%; border:none;"></object>
+    </div>
+  </section>
+</div>
 </section>
 <style>
   .pdf-page {
@@ -680,6 +695,157 @@
       opacity: 1;
     }
   }
+
+  /* New Redesign Styles */
+  .header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    margin-bottom: 8px;
+  }
+
+  .header-branding {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .brand-icon {
+    width: 24px;
+    height: 24px;
+    color: #a78bfa;
+    /* Lilac-ish */
+  }
+
+  .brand-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0;
+    /* color: inherit; handled by theme */
+  }
+
+  .btn-lilac {
+    background-color: #a78bfa;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .btn-lilac:hover {
+    background-color: #8b5cf6;
+  }
+
+  .nav-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background-color: #1e293b;
+    /* Dark bg for contrast or match card */
+    border-radius: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    border: 1px solid #334155;
+  }
+
+  .btn-nav {
+    background: transparent;
+    border: 1px solid #475569;
+    color: #e2e8f0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: default;
+    /* visual only for now */
+  }
+
+  .file-display {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: transparent;
+    color: #cbd5e1;
+    min-width: 150px;
+  }
+
+  .nav-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    /* Push controls to right if needed, or just gap */
+  }
+
+  .nav-label {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+
+  .nav-select {
+    background: #0f172a;
+    border: 1px solid #475569;
+    color: #e2e8f0;
+    padding: 6px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+
+  .btn-auto {
+    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+    border: none;
+    color: white;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    margin-left: 12px;
+  }
+
+  .btn-auto:hover {
+    filter: brightness(1.1);
+  }
+
+  .btn-green-save {
+    background-color: #10b981;
+    border: none;
+    color: white;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .btn-green-save:disabled {
+    background-color: #334155;
+    color: #94a3b8;
+    cursor: not-allowed;
+  }
+
+  .btn-green-save:not(:disabled):hover {
+    background-color: #059669;
+  }
+
+  .icon-sm {
+    width: 16px;
+    height: 16px;
+  }
 </style>
 <script>
   (function () {
@@ -688,10 +854,17 @@
     var PDFJS_FALLBACK_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
     var PDFJS_FALLBACK_WORKER_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
     var fileInput = document.getElementById("pdf-file-input");
-    var loadButton = document.getElementById("load-pdf-button");
-    var detectButton = document.getElementById("detect-sensitive-button");
-    var obfuscateButton = document.getElementById("obfuscate-sensitive-button");
-    var fileNameTarget = document.querySelector("[data-file-name]");
+
+    // New Buttons
+    var headerUploadBtn = document.getElementById("header-upload-btn");
+    var navAutoBtn = document.getElementById("nav-auto-btn");
+    var navFinalizeBtn = document.getElementById("nav-finalize-btn");
+    var fileNameDisplay = document.querySelector("[data-file-name-display]");
+
+    // Legacy logic mapping
+    var loadButton = document.getElementById("load-pdf-button"); // Hidden button for logic reuse if needed
+    var detectButton = { click: function () { } }; // Placeholder if element missing, but we'll map logic.
+
     var renderer = document.querySelector("[data-pdf-renderer]");
     var nativeViewer = document.querySelector("[data-pdf-native]");
     var placeholder = document.querySelector("[data-pdf-placeholder]");
@@ -703,7 +876,11 @@
     var debugContainer = document.querySelector("[data-debug-container]");
     var debugContent = document.querySelector("[data-debug-content]");
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');
-    if (!fileInput || !loadButton || !renderer || !container || !detectButton || !obfuscateButton || !detectionSummary || !detectionList || !selectAllCheckbox || !selectAllContainer) { return; }
+
+    // Validation
+    // if (!fileInput || !renderer || !container) { return; } 
+    // Relaxed check for new UI elements
+
 
     var pdfLoaderPromise = null;
     var activeWorkerSrc = PDFJS_WORKER_SRC;
@@ -716,10 +893,40 @@
     var activeRedactions = [];
 
     fileInput.addEventListener("change", function () {
-      if (fileNameTarget) {
+      if (fileNameDisplay) {
         var file = fileInput.files && fileInput.files[0];
-        fileNameTarget.textContent = file ? file.name : "Selecciona un PDF desde tu equipo";
+        fileNameDisplay.textContent = file ? file.name : "No file selected";
       }
+
+      // Auto-load logic
+      var file = fileInput.files && fileInput.files[0];
+      if (file) {
+        loadPdfFile(file);
+      }
+    });
+
+    // Upload button trigger
+    if (headerUploadBtn && fileInput) {
+      headerUploadBtn.addEventListener("click", function () {
+        fileInput.click();
+      });
+    }
+
+    // Auto Detect Trigger
+    if (navAutoBtn) {
+      navAutoBtn.addEventListener("click", function () {
+        startDetection();
+      });
+    }
+
+    // Finalize Trigger
+    if (navFinalizeBtn) {
+      navFinalizeBtn.addEventListener("click", function () {
+        saveRedactedPdf();
+      });
+    }
+
+    function resetUI() {
       detectionSummary.textContent = "No se ha analizado ningun PDF todavia.";
       detectionList.innerHTML = "";
       latestFindings = null;
@@ -728,25 +935,16 @@
       clearSelections();
       showSelectAllControls(false);
       showDebugInfo(null);
-      obfuscateButton.disabled = true;
-    });
+      if (navFinalizeBtn) navFinalizeBtn.disabled = true;
+    }
 
-    loadButton.addEventListener("click", function () {
-      var file = fileInput.files && fileInput.files[0];
-      if (!file) {
-        alert("Selecciona un archivo PDF antes de cargarlo.");
-        return;
-      }
+    // Extracted Load Logic
+    function loadPdfFile(file) {
       if (!isPdfFile(file)) {
         alert("El archivo seleccionado debe ser un PDF.");
         return;
       }
-      loadButton.blur();
-      clearSelections();
-      showSelectAllControls(false);
-      showDebugInfo(null);
-      obfuscateButton.disabled = true;
-      activeRedactions = [];
+      resetUI();
       detectionSummary.textContent = "Renderizando PDF...";
       detectionList.innerHTML = "";
       container.classList.add("has-file");
@@ -758,10 +956,7 @@
       applyHighlights(null);
       readFileAsArrayBuffer(file)
         .then(function (uint8) {
-          // CLONE the data for local storage, because passing 'uint8' to PDF.js
-          // (especially in worker mode) might transfer/detach the buffer.
           currentPdfBytes = uint8.slice(0); // Deep copy
-
           applyHighlights(null);
           if (nativeViewer) {
             var blob = new Blob([currentPdfBytes], { type: 'application/pdf' });
@@ -778,8 +973,8 @@
           });
         })
         .then(function () {
-          detectionSummary.textContent = "El PDF esta listo para analizar. Los hallazgos se resaltaran en amarillo.";
-          detectionList.innerHTML = '<li class="detection-empty">Pulsa "Detectar datos sensibles" para iniciar el analisis.</li>';
+          detectionSummary.textContent = "El PDF esta listo para analizar. Pulsa AUTO para iniciar.";
+          detectionList.innerHTML = '<li class="detection-empty">Pulsa "AUTO" para iniciar el analisis.</li>';
         })
         .catch(function (err) {
           console.error(err);
@@ -787,9 +982,21 @@
           detectionList.innerHTML = '<li class="detection-empty">Intenta cargar el documento de nuevo.</li>';
           resetViewer();
         });
-    });
+    }
 
-    detectButton.addEventListener("click", function () {
+    // Keep legacy load button generic
+    if (loadButton) {
+      loadButton.addEventListener("click", function () {
+        var file = fileInput.files && fileInput.files[0];
+        if (file) loadPdfFile(file);
+      });
+    }
+
+    /* 
+    detectButton.addEventListener("click", function () { ... 
+    Replacing this block with a named function `startDetection` 
+    */
+    function startDetection() {
       var file = fileInput.files && fileInput.files[0];
       if (!file) {
         alert("Selecciona un archivo PDF antes de analizarlo.");
@@ -913,67 +1120,81 @@
         });
     });
 
+    // Function to handle the Finalize/Save process
+    function saveRedactedPdf() {
+      var selectedValues = getSelectedValues();
+      var navFinalizeBtn = document.getElementById("nav-finalize-btn");
+
+      if (!selectedValues.length) {
+        alert("Primero debes emborronar algo para poder guardar.");
+        return;
+      }
+      if (!currentPdfBytes) {
+        alert("No hay PDF cargado.");
+        return;
+      }
+
+      // Disable button during processing
+      if (navFinalizeBtn) {
+        navFinalizeBtn.disabled = true;
+        var originalText = navFinalizeBtn.innerHTML;
+        navFinalizeBtn.innerHTML = '<i data-lucide="loader-2" class="icon-sm spin"></i> Guardando...';
+      }
+
+      calculateRedactionCoordinates(currentPdfBytes, selectedValues)
+        .then(function (redactions) {
+          if (!redactions || !redactions.length) {
+            alert("No se encontraron coincidencias para los términos seleccionados.");
+            if (navFinalizeBtn) {
+              navFinalizeBtn.disabled = false;
+              navFinalizeBtn.innerHTML = originalText;
+            }
+            return;
+          }
+
+          var formData = new FormData();
+          var blob = new Blob([currentPdfBytes], { type: "application/pdf" });
+          formData.append("file", blob, "original.pdf");
+          formData.append("redactions", JSON.stringify(redactions));
+
+          var csrf = getCsrfToken();
+
+          fetch("/api/pdf/redact", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrf },
+            body: formData
+          })
+            .then(function (res) {
+              if (res.status === 501) {
+                throw new Error("El servidor no tiene instalada la librería de seguridad (PyMuPDF). Instala 'pymupdf' con pip.");
+              }
+              if (!res.ok) {
+                return res.json().then(function (d) { throw new Error(d.error || "Error en servidor"); });
+              }
+              return res.blob();
+            })
+            .then(function (blob) {
+              downloadBlob(blob, "documento_censurado_seguro.pdf", "application/pdf");
+            })
+            .catch(function (err) {
+              console.error(err);
+              alert("Error guardando PDF: " + err.message);
+            })
+            .finally(function () {
+              if (navFinalizeBtn) {
+                navFinalizeBtn.disabled = false;
+                navFinalizeBtn.innerHTML = originalText;
+              }
+              lucide.createIcons();
+            });
+        });
+    }
+
+    // Keep legacy save listener if the button exists and is visible (it's hidden now)
     var saveButton = document.getElementById("save-redacted-button");
     if (saveButton) {
       saveButton.addEventListener("click", function () {
-        var selectedValues = getSelectedValues();
-
-        if (!selectedValues.length) {
-          alert("Primero debes emborronar algo para poder guardar.");
-          return;
-        }
-        if (!currentPdfBytes) {
-          alert("No hay PDF cargado.");
-          return;
-        }
-
-        // Deshabilitar botón durante proceso
-        saveButton.disabled = true;
-        var originalText = saveButton.innerHTML;
-        saveButton.innerHTML = 'Procesando...';
-
-        calculateRedactionCoordinates(currentPdfBytes, selectedValues)
-          .then(function (redactions) {
-            if (!redactions || !redactions.length) {
-              alert("No se encontraron coincidencias para los términos seleccionados.");
-              saveButton.disabled = false;
-              saveButton.innerHTML = originalText;
-              return;
-            }
-
-            var formData = new FormData();
-            var blob = new Blob([currentPdfBytes], { type: "application/pdf" });
-            formData.append("file", blob, "original.pdf");
-            formData.append("redactions", JSON.stringify(redactions));
-
-            var csrf = getCsrfToken();
-
-            fetch("/api/pdf/redact", {
-              method: "POST",
-              headers: { "X-CSRFToken": csrf },
-              body: formData
-            })
-              .then(function (res) {
-                if (res.status === 501) {
-                  throw new Error("El servidor no tiene instalada la librería de seguridad (PyMuPDF). Instala 'pymupdf' con pip.");
-                }
-                if (!res.ok) {
-                  return res.json().then(function (d) { throw new Error(d.error || "Error en servidor"); });
-                }
-                return res.blob();
-              })
-              .then(function (blob) {
-                downloadBlob(blob, "documento_censurado_seguro.pdf", "application/pdf");
-              })
-              .catch(function (err) {
-                console.error(err);
-                alert("Error guardando PDF: " + err.message);
-              })
-              .finally(function () {
-                saveButton.disabled = false;
-                saveButton.innerHTML = originalText;
-              });
-          });
+        saveRedactedPdf();
       });
     }
 
@@ -2707,6 +2928,10 @@
     // Patch shouldRedactItem to include manual text redactions
     var originalShouldRedactItem = typeof shouldRedactItem === 'function' ? shouldRedactItem : null;
 
+    // Initialize icons
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
   })();
 </script>
 
