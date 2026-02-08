@@ -862,8 +862,11 @@
     var fileNameDisplay = document.querySelector("[data-file-name-display]");
 
     // Legacy logic mapping
-    var loadButton = document.getElementById("load-pdf-button"); // Hidden button for logic reuse if needed
-    var detectButton = { click: function () { } }; // Placeholder if element missing, but we'll map logic.
+    var loadButton = document.getElementById("load-pdf-button");
+    // Dummies to prevent ReferenceError in legacy code parts we haven't fully cleaned yet
+    var detectButton = { disabled: false, innerHTML: "", addEventListener: function () { }, blur: function () { } };
+    var obfuscateButton = { disabled: false, innerHTML: "", addEventListener: function () { }, blur: function () { } };
+    var saveButton = { disabled: false, innerHTML: "", addEventListener: function () { }, blur: function () { } };
 
     var renderer = document.querySelector("[data-pdf-renderer]");
     var nativeViewer = document.querySelector("[data-pdf-native]");
@@ -1012,1943 +1015,1967 @@
         alert("El archivo seleccionado debe ser un PDF.");
         return;
       }
-      detectButton.disabled = true;
-      clearSelections();
-      showSelectAllControls(false);
-      showDebugInfo(null);
-      obfuscateButton.disabled = true;
-      activeRedactions = [];
-      detectionSummary.textContent = "Analizando PDF en busca de datos sensibles...";
-      detectionList.innerHTML = "";
+      return;
+    }
 
-      var analysisPromise = currentPdfBytes
-        ? Promise.resolve(currentPdfBytes)
-        : readFileAsArrayBuffer(file).then(function (uint8) {
-          currentPdfBytes = uint8;
-          return uint8;
-        });
+    // UI Loading State (New Button)
+    if (navAutoBtn) {
+      navAutoBtn.disabled = true;
+      navAutoBtn.innerHTML = '<i data-lucide="loader-2" class="icon-sm spin"></i> Analizando...';
+    }
 
-      analysisPromise
-        .then(function (bytes) {
-          return ensurePdfJs().then(function (pdfjs) {
-            var docPromise = currentPdfDoc
-              ? Promise.resolve(currentPdfDoc)
-              : pdfjs.getDocument({ data: bytes }).promise.then(function (doc) {
-                currentPdfDoc = doc;
-                return doc;
-              });
-            return docPromise.then(function (pdfDoc) {
-              var textPromises = [];
-              for (var i = 1; i <= pdfDoc.numPages; i++) {
-                textPromises.push(
-                  pdfDoc.getPage(i).then(function (page) {
-                    return page.getTextContent().then(function (content) {
-                      return content.items.map(function (item) { return item.str; }).join(" ");
-                    });
-                  })
-                );
-              }
-              return Promise.all(textPromises).then(function (pages) {
-                return pages.join("\n");
-              });
+    clearSelections();
+    showSelectAllControls(false);
+    showDebugInfo(null);
+
+    activeRedactions = [];
+    detectionSummary.textContent = "Analizando PDF en busca de datos sensibles...";
+    detectionList.innerHTML = "";
+
+    var analysisPromise = currentPdfBytes
+      ? Promise.resolve(currentPdfBytes)
+      : readFileAsArrayBuffer(file).then(function (uint8) {
+        currentPdfBytes = uint8;
+        return uint8;
+      });
+
+    analysisPromise
+      .then(function (bytes) {
+        return ensurePdfJs().then(function (pdfjs) {
+          var docPromise = currentPdfDoc
+            ? Promise.resolve(currentPdfDoc)
+            : pdfjs.getDocument({ data: bytes }).promise.then(function (doc) {
+              currentPdfDoc = doc;
+              return doc;
+            });
+          return docPromise.then(function (pdfDoc) {
+            var textPromises = [];
+            for (var i = 1; i <= pdfDoc.numPages; i++) {
+              textPromises.push(
+                pdfDoc.getPage(i).then(function (page) {
+                  return page.getTextContent().then(function (content) {
+                    return content.items.map(function (item) { return item.str; }).join(" ");
+                  });
+                })
+              );
+            }
+            return Promise.all(textPromises).then(function (pages) {
+              return pages.join("\n");
             });
           });
-        })
-        .then(function (fullText) {
-          documentFullText = fullText || "";
-          return processSensitiveData(documentFullText);
-        })
-        .catch(function (err) {
-          console.error(err);
-          var message = err && err.message ? err.message : "Hubo un problema analizando el PDF.";
-          detectionSummary.textContent = message;
-          activeRedactions = [];
-          clearSelections();
-          showSelectAllControls(false);
-          obfuscateButton.disabled = true;
-          applyHighlights(null);
-          if (!detectionList.innerHTML) {
-            detectionList.innerHTML = '<li class="detection-empty">No fue posible analizar el documento.</li>';
-          }
-        })
-        .finally(function () {
-          detectButton.disabled = false;
         });
-    }
+      })
+      .then(function (fullText) {
+        documentFullText = fullText || "";
+        return processSensitiveData(documentFullText);
+      })
+      .catch(function (err) {
+        console.error(err);
+        var message = err && err.message ? err.message : "Hubo un problema analizando el PDF.";
+        detectionSummary.textContent = message;
+        activeRedactions = [];
+        clearSelections();
+        showSelectAllControls(false);
+        obfuscateButton.disabled = true;
+        applyHighlights(null);
+        if (!detectionList.innerHTML) {
+          detectionList.innerHTML = '<li class="detection-empty">No fue posible analizar el documento.</li>';
+        }
+      })
+      .finally(function () {
+        if (navAutoBtn) {
+          navAutoBtn.disabled = false;
+          navAutoBtn.innerHTML = '<i data-lucide="sparkles" class="icon-sm"></i> AUTO';
+          if (window.lucide) window.lucide.createIcons();
+        }
+      });
+  }
 
     // Se usa para almacenar el blob de previsualización (censurado)
     var currentRedactedBlobUrl = null;
 
-    obfuscateButton.addEventListener("click", function () {
-      var hasAiFindings = latestFindings && latestFindings.length;
-      var hasManualRedactions = typeof manualRedactions !== 'undefined' && manualRedactions.length > 0;
-      if (!hasAiFindings && !hasManualRedactions) {
-        alert("Detecta datos sensibles o añade redacciones manuales primero.");
-        return;
+  // Preview Mode Select Logic
+  var previewSelect = document.getElementById("preview-mode-select");
+  if (previewSelect) {
+    previewSelect.addEventListener("change", function () {
+      var mode = previewSelect.value;
+      if (mode === 'original') {
+        // Restore original view
+        if (currentPdfBytes && nativeViewer) {
+          var blob = new Blob([currentPdfBytes], { type: 'application/pdf' });
+          var url = URL.createObjectURL(blob);
+          nativeViewer.data = url;
+        }
+      } else if (mode === 'redacted') {
+        // Generate and show redacted view
+        updateRedactedPreview();
       }
-      var selectedValues = getSelectedValues();
-      obfuscateButton.blur();
-
-      // GENERAR PREVIEW
-      if (!currentPdfBytes) {
-        alert("No hay PDF cargado.");
-        return;
-      }
-
-      detectionSummary.textContent = "Generando previsualización censurada...";
-
-      generateRedactedPdfBytes(currentPdfBytes, latestFindings, selectedValues)
-        .then(function (redactedBytes) {
-          if (!redactedBytes) return; // Error handled inside
-
-          // Actualizar el visor nativo con el nuevo PDF
-          var blob = new Blob([redactedBytes], { type: 'application/pdf' });
-          if (currentRedactedBlobUrl) {
-            window.URL.revokeObjectURL(currentRedactedBlobUrl);
-          }
-          currentRedactedBlobUrl = window.URL.createObjectURL(blob);
-
-          if (nativeViewer) {
-            nativeViewer.data = currentRedactedBlobUrl;
-          }
-
-          var baseMessage = "Se ocultaron " + selectedValues.length + " datos sensibles. Previsualización actualizada.";
-          if (detectionSummary) {
-            detectionSummary.textContent = baseMessage;
-            detectionSummary.dataset.baseMessage = baseMessage;
-          }
-
-          // Habilitar guardar
-          var saveButton = document.getElementById("save-redacted-button");
-          if (saveButton) {
-            saveButton.disabled = false;
-          }
-        });
     });
+  }
 
-    // Function to handle the Finalize/Save process
-    function saveRedactedPdf() {
-      var selectedValues = getSelectedValues();
-      var navFinalizeBtn = document.getElementById("nav-finalize-btn");
+  function updateRedactedPreview() {
+    var hasAiFindings = latestFindings && latestFindings.length;
+    var hasManualRedactions = typeof manualRedactions !== 'undefined' && manualRedactions.length > 0;
 
-      if (!selectedValues.length) {
-        alert("Primero debes emborronar algo para poder guardar.");
-        return;
-      }
-      if (!currentPdfBytes) {
-        alert("No hay PDF cargado.");
-        return;
-      }
+    var selectedValues = getSelectedValues();
 
-      // Disable button during processing
-      if (navFinalizeBtn) {
-        navFinalizeBtn.disabled = true;
-        var originalText = navFinalizeBtn.innerHTML;
-        navFinalizeBtn.innerHTML = '<i data-lucide="loader-2" class="icon-sm spin"></i> Guardando...';
-      }
+    // GENERAR PREVIEW
+    if (!currentPdfBytes) {
+      alert("No hay PDF cargado.");
+      if (previewSelect) previewSelect.value = 'original';
+      return;
+    }
 
-      calculateRedactionCoordinates(currentPdfBytes, selectedValues)
-        .then(function (redactions) {
-          if (!redactions || !redactions.length) {
-            alert("No se encontraron coincidencias para los términos seleccionados.");
+    detectionSummary.textContent = "Generando previsualización censurada...";
+
+    generateRedactedPdfBytes(currentPdfBytes, latestFindings, selectedValues)
+      .then(function (redactedBytes) {
+        if (!redactedBytes) return; // Error handled inside
+
+        // Actualizar el visor nativo con el nuevo PDF
+        var blob = new Blob([redactedBytes], { type: 'application/pdf' });
+        if (currentRedactedBlobUrl) {
+          window.URL.revokeObjectURL(currentRedactedBlobUrl);
+        }
+        currentRedactedBlobUrl = window.URL.createObjectURL(blob);
+
+        if (nativeViewer) {
+          nativeViewer.data = currentRedactedBlobUrl;
+        }
+
+        var baseMessage = "Previsualización actualizada (" + (selectedValues.length + activeRedactions.length) + " redacciones).";
+        if (detectionSummary) {
+          detectionSummary.textContent = baseMessage;
+          detectionSummary.dataset.baseMessage = baseMessage;
+        }
+
+        if (navFinalizeBtn) navFinalizeBtn.disabled = false;
+      });
+  }
+
+  // Function to handle the Finalize/Save process
+  function saveRedactedPdf() {
+    var selectedValues = getSelectedValues();
+    var navFinalizeBtn = document.getElementById("nav-finalize-btn");
+
+    if (!selectedValues.length) {
+      alert("Primero debes emborronar algo para poder guardar.");
+      return;
+    }
+    if (!currentPdfBytes) {
+      alert("No hay PDF cargado.");
+      return;
+    }
+
+    // Disable button during processing
+    if (navFinalizeBtn) {
+      navFinalizeBtn.disabled = true;
+      var originalText = navFinalizeBtn.innerHTML;
+      navFinalizeBtn.innerHTML = '<i data-lucide="loader-2" class="icon-sm spin"></i> Guardando...';
+    }
+
+    calculateRedactionCoordinates(currentPdfBytes, selectedValues)
+      .then(function (redactions) {
+        if (!redactions || !redactions.length) {
+          alert("No se encontraron coincidencias para los términos seleccionados.");
+          if (navFinalizeBtn) {
+            navFinalizeBtn.disabled = false;
+            navFinalizeBtn.innerHTML = originalText;
+          }
+          return;
+        }
+
+        var formData = new FormData();
+        var blob = new Blob([currentPdfBytes], { type: "application/pdf" });
+        formData.append("file", blob, "original.pdf");
+        formData.append("redactions", JSON.stringify(redactions));
+
+        var csrf = getCsrfToken();
+
+        fetch("/api/pdf/redact", {
+          method: "POST",
+          headers: { "X-CSRFToken": csrf },
+          body: formData
+        })
+          .then(function (res) {
+            if (res.status === 501) {
+              throw new Error("El servidor no tiene instalada la librería de seguridad (PyMuPDF). Instala 'pymupdf' con pip.");
+            }
+            if (!res.ok) {
+              return res.json().then(function (d) { throw new Error(d.error || "Error en servidor"); });
+            }
+            return res.blob();
+          })
+          .then(function (blob) {
+            downloadBlob(blob, "documento_censurado_seguro.pdf", "application/pdf");
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert("Error guardando PDF: " + err.message);
+          })
+          .finally(function () {
             if (navFinalizeBtn) {
               navFinalizeBtn.disabled = false;
               navFinalizeBtn.innerHTML = originalText;
             }
-            return;
-          }
+            lucide.createIcons();
+          });
+      });
+  }
 
-          var formData = new FormData();
-          var blob = new Blob([currentPdfBytes], { type: "application/pdf" });
-          formData.append("file", blob, "original.pdf");
-          formData.append("redactions", JSON.stringify(redactions));
+  // Keep legacy save listener if the button exists and is visible (it's hidden now)
+  var saveButton = document.getElementById("save-redacted-button");
+  if (saveButton) {
+    saveButton.addEventListener("click", function () {
+      saveRedactedPdf();
+    });
+  }
 
-          var csrf = getCsrfToken();
+  // Function to check if text should be redacted
+  function shouldRedactItem(text, redactionTerms) {
+    if (!text || !redactionTerms || !redactionTerms.length) return false;
+    var normalized = text.toLowerCase().trim();
+    for (var i = 0; i < redactionTerms.length; i++) {
+      var term = redactionTerms[i];
+      if (!term) continue;
+      var normalizedTerm = term.toLowerCase().trim();
+      // Check if the text contains or matches the term
+      if (normalized.includes(normalizedTerm) || normalizedTerm.includes(normalized)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
-          fetch("/api/pdf/redact", {
-            method: "POST",
-            headers: { "X-CSRFToken": csrf },
-            body: formData
-          })
-            .then(function (res) {
-              if (res.status === 501) {
-                throw new Error("El servidor no tiene instalada la librería de seguridad (PyMuPDF). Instala 'pymupdf' con pip.");
-              }
-              if (!res.ok) {
-                return res.json().then(function (d) { throw new Error(d.error || "Error en servidor"); });
-              }
-              return res.blob();
-            })
-            .then(function (blob) {
-              downloadBlob(blob, "documento_censurado_seguro.pdf", "application/pdf");
-            })
-            .catch(function (err) {
-              console.error(err);
-              alert("Error guardando PDF: " + err.message);
-            })
-            .finally(function () {
-              if (navFinalizeBtn) {
-                navFinalizeBtn.disabled = false;
-                navFinalizeBtn.innerHTML = originalText;
-              }
-              lucide.createIcons();
+  async function calculateRedactionCoordinates(pdfBytes, redactionTerms) {
+    if (!window.PDFLib) return [];
+
+    try {
+      var pdfCopy = new Uint8Array(pdfBytes);
+      var pdfDoc = await PDFLib.PDFDocument.load(pdfCopy, { ignoreEncryption: true });
+      var pages = pdfDoc.getPages();
+      var redactedRects = [];
+
+      if (!currentPdfDoc) return [];
+
+      for (var pgIdx = 0; pgIdx < pages.length; pgIdx++) {
+        var pdfJsPage = await currentPdfDoc.getPage(pgIdx + 1);
+        var textContent = await pdfJsPage.getTextContent();
+
+        for (var item of textContent.items) {
+          var text = item.str;
+          if (!text) continue;
+          var shouldRedact = shouldRedactItem(text, redactionTerms);
+          if (shouldRedact) {
+            // PDF Layout:
+            // item.transform -> [scaleX, skewY, skewX, scaleY, tx, ty]
+            // Width/Height logic similar to pdf_tool logic
+            var tx = item.transform[4];
+            var ty = item.transform[5];
+            var itemWidth = item.width || 0;
+            var fontSize = Math.sqrt(item.transform[0] * item.transform[0] + item.transform[1] * item.transform[1]);
+
+            // Backend (PyMuPDF) expects: page (1-based), x, y, width, height.
+            // Coordinate system: PDF standard (bottom-left origin usually, but fitz handles internal?)
+            // PyMuPDF fitz.Rect(x0, y0, x1, y1).
+            // Actually PDF uses bottom-up Y, but pdf.js and fitz text extraction often normalize.
+            // However, drawing rectangles in PyMuPDF (add_redact_annot) works with Top-Left origin usually if using normal coordinates?
+            // Wait, typical PDF is bottom-left origin.
+            // Let's pass the raw PDF coordinates we get from pdf.js.
+            // pdf.js text items are in PDF user space.
+            // PyMuPDF expects rect in PDF user space.
+            // One catch: item.transform[5] (ty) is the baseline. We need the "top" of the text box?
+            // Or bottom?
+            // The regex box drawing in generateRedactedPdfBytes used (tx, ty, width, height).
+            // Let's verify how it was doing it:
+            // page.drawRectangle({ x: tx, y: ty, ... }) -> pdf-lib uses bottom-left origin.
+            // So tx, ty is the bottom-left corner of the text?
+            // Ideally yes.
+
+            redactedRects.push({
+              page: pgIdx + 1,
+              x: tx,
+              y: ty,
+              width: itemWidth,
+              height: fontSize
             });
-        });
-    }
-
-    // Keep legacy save listener if the button exists and is visible (it's hidden now)
-    var saveButton = document.getElementById("save-redacted-button");
-    if (saveButton) {
-      saveButton.addEventListener("click", function () {
-        saveRedactedPdf();
-      });
-    }
-
-    // Function to check if text should be redacted
-    function shouldRedactItem(text, redactionTerms) {
-      if (!text || !redactionTerms || !redactionTerms.length) return false;
-      var normalized = text.toLowerCase().trim();
-      for (var i = 0; i < redactionTerms.length; i++) {
-        var term = redactionTerms[i];
-        if (!term) continue;
-        var normalizedTerm = term.toLowerCase().trim();
-        // Check if the text contains or matches the term
-        if (normalized.includes(normalizedTerm) || normalizedTerm.includes(normalized)) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    async function calculateRedactionCoordinates(pdfBytes, redactionTerms) {
-      if (!window.PDFLib) return [];
-
-      try {
-        var pdfCopy = new Uint8Array(pdfBytes);
-        var pdfDoc = await PDFLib.PDFDocument.load(pdfCopy, { ignoreEncryption: true });
-        var pages = pdfDoc.getPages();
-        var redactedRects = [];
-
-        if (!currentPdfDoc) return [];
-
-        for (var pgIdx = 0; pgIdx < pages.length; pgIdx++) {
-          var pdfJsPage = await currentPdfDoc.getPage(pgIdx + 1);
-          var textContent = await pdfJsPage.getTextContent();
-
-          for (var item of textContent.items) {
-            var text = item.str;
-            if (!text) continue;
-            var shouldRedact = shouldRedactItem(text, redactionTerms);
-            if (shouldRedact) {
-              // PDF Layout:
-              // item.transform -> [scaleX, skewY, skewX, scaleY, tx, ty]
-              // Width/Height logic similar to pdf_tool logic
-              var tx = item.transform[4];
-              var ty = item.transform[5];
-              var itemWidth = item.width || 0;
-              var fontSize = Math.sqrt(item.transform[0] * item.transform[0] + item.transform[1] * item.transform[1]);
-
-              // Backend (PyMuPDF) expects: page (1-based), x, y, width, height.
-              // Coordinate system: PDF standard (bottom-left origin usually, but fitz handles internal?)
-              // PyMuPDF fitz.Rect(x0, y0, x1, y1).
-              // Actually PDF uses bottom-up Y, but pdf.js and fitz text extraction often normalize.
-              // However, drawing rectangles in PyMuPDF (add_redact_annot) works with Top-Left origin usually if using normal coordinates?
-              // Wait, typical PDF is bottom-left origin.
-              // Let's pass the raw PDF coordinates we get from pdf.js.
-              // pdf.js text items are in PDF user space.
-              // PyMuPDF expects rect in PDF user space.
-              // One catch: item.transform[5] (ty) is the baseline. We need the "top" of the text box?
-              // Or bottom?
-              // The regex box drawing in generateRedactedPdfBytes used (tx, ty, width, height).
-              // Let's verify how it was doing it:
-              // page.drawRectangle({ x: tx, y: ty, ... }) -> pdf-lib uses bottom-left origin.
-              // So tx, ty is the bottom-left corner of the text?
-              // Ideally yes.
-
-              redactedRects.push({
-                page: pgIdx + 1,
-                x: tx,
-                y: ty,
-                width: itemWidth,
-                height: fontSize
-              });
-            }
-          }
-        }
-        return redactedRects;
-      } catch (e) {
-        console.error("Error calc coords", e);
-        return [];
-      }
-    }
-
-    async function generateRedactedPdfBytes(pdfBytes, findings, redactionTerms) {
-      if (!window.PDFLib) {
-        alert("La librería PDF-Lib no se ha cargado correctamente.");
-        return null;
-      }
-
-      // DEBUG: Verificar entrada
-      try {
-        if (pdfBytes && pdfBytes.length > 4) {
-          var header = String.fromCharCode(pdfBytes[0], pdfBytes[1], pdfBytes[2], pdfBytes[3]);
-          if (header !== "%PDF") {
-            console.error("Invalid PDF Header:", header);
-            alert("El archivo en memoria no parece ser un PDF válido. Intenta recargar.");
-            return null;
-          }
-        }
-      } catch (e) {
-        console.error("Debug Error:", e);
-      }
-
-      try {
-        // Clonamos para evitar problemas de referencia o modificación
-        var pdfCopy = new Uint8Array(pdfBytes);
-        var pdfDoc = await PDFLib.PDFDocument.load(pdfCopy, { ignoreEncryption: true });
-        var pages = pdfDoc.getPages();
-
-        if (!currentPdfDoc) {
-          alert("Error interno: documento PDF.js no disponible.");
-          return null;
-        }
-
-        for (var pgIdx = 0; pgIdx < pages.length; pgIdx++) {
-          var page = pages[pgIdx];
-          var pdfJsPage = await currentPdfDoc.getPage(pgIdx + 1); // 1-based
-          var textContent = await pdfJsPage.getTextContent();
-
-          for (var item of textContent.items) {
-            var text = item.str;
-            if (!text) continue;
-
-            var shouldRedact = shouldRedactItem(text, redactionTerms);
-            if (shouldRedact) {
-              var tx = item.transform[4];
-              var ty = item.transform[5];
-              var itemWidth = item.width || 0;
-              var fontSize = Math.sqrt(item.transform[0] * item.transform[0] + item.transform[1] * item.transform[1]);
-
-              page.drawRectangle({
-                x: tx,
-                y: ty,
-                width: itemWidth,
-                height: fontSize,
-                color: PDFLib.rgb(0, 0, 0),
-                opacity: 1,
-              });
-            }
-          }
-        }
-
-        // ---- DRAW MANUAL RECT REDACTIONS ----
-        // Get rect redactions from manualRedactions array
-        var rectRedactions = [];
-        if (typeof manualRedactions !== 'undefined' && manualRedactions.length) {
-          rectRedactions = manualRedactions.filter(function (r) { return r.type === 'rect' && r.coords; });
-        }
-
-        if (rectRedactions.length > 0) {
-          for (var rIdx = 0; rIdx < rectRedactions.length; rIdx++) {
-            var redact = rectRedactions[rIdx];
-            var coords = redact.coords;
-            var pageIdx = (coords.page || 1) - 1; // Convert to 0-based
-
-            if (pageIdx >= 0 && pageIdx < pages.length) {
-              var targetPage = pages[pageIdx];
-              var pageSize = targetPage.getSize();
-
-              // Convert ratio (0-1) to PDF coordinates using PDFLib's page dimensions
-              var xRatio = coords.xRatio || 0;
-              var yRatio = coords.yRatio || 0;
-              var wRatio = coords.wRatio || 0;
-              var hRatio = coords.hRatio || 0;
-
-              var pdfX = xRatio * pageSize.width;
-              var pdfW = wRatio * pageSize.width;
-              var pdfH = hRatio * pageSize.height;
-              // Flip Y: ratio is from top, PDF is from bottom
-              var pdfY = pageSize.height - (yRatio * pageSize.height) - pdfH;
-
-              targetPage.drawRectangle({
-                x: pdfX,
-                y: pdfY,
-                width: pdfW,
-                height: pdfH,
-                color: PDFLib.rgb(0, 0, 0),
-                opacity: 1,
-              });
-            }
-          }
-        }
-
-        var pdfBytesModified = await pdfDoc.save();
-        return pdfBytesModified;
-
-      } catch (e) {
-        console.error(e);
-        alert("Error generando PDF censurado: " + e.message);
-        return null;
-      }
-    }
-
-    function downloadBlob(data, fileName, mimeType) {
-      var blob = new Blob([data], { type: mimeType });
-      var url = window.URL.createObjectURL(blob);
-      var a = document.createElement("a");
-      a.style.display = "none";
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    }
-
-    detectionList.addEventListener("change", function (event) {
-      var target = event.target;
-      if (!target || !target.matches('input[data-entry-key]')) { return; }
-      var key = target.getAttribute("data-entry-key");
-      if (!key) { return; }
-      var entry = selectionState[key];
-      if (!entry) {
-        var decoded = decodeEntryKey(key);
-        selectionState[key] = {
-          label: decoded.label || "",
-          value: (decoded.value || "").trim(),
-          selected: target.checked
-        };
-      } else {
-        entry.selected = target.checked;
-      }
-      updateSelectAllUi();
-      if (detectionSummary && detectionSummary.dataset && detectionSummary.dataset.baseMessage) {
-        detectionSummary.textContent = detectionSummary.dataset.baseMessage;
-      }
-    });
-
-    selectAllCheckbox.addEventListener("change", function () {
-      var checked = !!selectAllCheckbox.checked;
-      var keys = Object.keys(selectionState);
-      if (keys.length) {
-        keys.forEach(function (key) {
-          if (!selectionState[key]) { return; }
-          selectionState[key].selected = checked;
-        });
-      }
-      detectionList.querySelectorAll('input[data-entry-key]').forEach(function (input) {
-        input.checked = checked;
-      });
-      selectAllCheckbox.indeterminate = false;
-      if (detectionSummary && detectionSummary.dataset && detectionSummary.dataset.baseMessage) {
-        detectionSummary.textContent = detectionSummary.dataset.baseMessage;
-      }
-    });
-
-    window.addEventListener("beforeunload", destroyCurrentPdf);
-
-    function processSensitiveData(fullText) {
-      // Simplified: send text directly to AI without regex pre-filtering
-      if (!fullText || !fullText.trim()) {
-        detectionSummary.textContent = "No hay texto para analizar.";
-        detectionList.innerHTML = '<li class="detection-empty">Sin texto.</li>';
-        applyHighlights(null);
-        activeRedactions = [];
-        clearSelections();
-        showSelectAllControls(false);
-        showDebugInfo(null);
-        obfuscateButton.disabled = true;
-
-        // Hide chat
-        if (chatSection) chatSection.style.display = 'none';
-        return Promise.resolve();
-      }
-
-      // Update chat context
-      currentDocText = fullText;
-
-      detectionSummary.textContent = "Analizando documento con IA...";
-      detectionList.innerHTML = '<li class="detection-empty">Esperando respuesta de IA...</li>';
-
-      return callAiValidation(fullText)
-        .then(function (aiData) {
-          // Update chat context with results
-          currentDetectionResults = aiData.sensitive || [];
-          chatHistory = []; // Reset history for new document
-
-          // Show chat section and reset UI
-          if (chatSection) {
-            chatSection.style.display = 'block';
-            chatMessages.innerHTML = '<p style="color: #94a3b8; font-size: 12px; margin: 0; padding: 8px;">Pregunta a la IA sobre sus decisiones de detección...</p>';
-          }
-
-          if (aiData && aiData.debug) {
-            showDebugInfo(aiData.debug);
-          }
-          if (aiData && aiData.sensitive && aiData.sensitive.length) {
-            var grouped = groupByLabel(aiData.sensitive);
-            prepareSelectionState(grouped);
-            renderResultsList(grouped, detectionList, { showReason: true, withSelection: true });
-            updateSelectAllUi();
-            showSelectAllControls(true);
-            obfuscateButton.disabled = false;
-            activeRedactions = [];
-            var total = grouped.reduce(function (acc, item) {
-              return acc + (item.entries ? item.entries.length : 0);
-            }, 0);
-            var note = aiData.model ? " (modelo " + aiData.model + ")" : "";
-            detectionSummary.textContent = "La IA encontro " + total + " dato(s) sensible(s)" + note + ".";
-            detectionSummary.dataset.baseMessage = detectionSummary.textContent;
-            applyHighlights(grouped, { redactionTerms: [] });
-            return;
-          }
-          detectionSummary.textContent = "La IA no identifico datos sensibles en el documento.";
-          detectionList.innerHTML = '<li class="detection-empty">Sin datos sensibles encontrados.</li>';
-          activeRedactions = [];
-          clearSelections();
-          showSelectAllControls(false);
-          obfuscateButton.disabled = true;
-          applyHighlights(null);
-        })
-        .catch(function (err) {
-          console.error(err);
-          detectionSummary.textContent = "Error al analizar con IA: " + err.message;
-          detectionList.innerHTML = '<li class="detection-empty">Error en el analisis.</li>';
-          activeRedactions = [];
-          clearSelections();
-          showSelectAllControls(false);
-          obfuscateButton.disabled = true;
-
-          // Hide chat on error
-          if (chatSection) chatSection.style.display = 'none';
-        });
-    }
-
-    function callAiValidation(fullText) {
-      // Simplified: just send the text, AI will find all sensitive data
-      var headers = { "Content-Type": "application/json" };
-      var token = getCsrfToken();
-      if (token) {
-        headers["X-CSRFToken"] = token;
-      }
-      return fetch("/api/pdf/analyze", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: headers,
-        body: JSON.stringify({ text: fullText })
-      }).then(function (response) {
-        return response.text().then(function (bodyText) {
-          console.log("API Status:", response.status);
-          console.log("API Response:", bodyText);
-
-          // Show in debug panel
-          var debugContainer = document.querySelector('[data-debug-container]');
-          var debugContent = document.querySelector('[data-debug-content]');
-          if (debugContainer && debugContent) {
-            debugContainer.style.display = 'block';
-            debugContent.textContent = "=== API Response ===\nStatus: " + response.status +
-              "\n\n=== Body ===\n" + bodyText.substring(0, 2000);
-          }
-
-          var data = {};
-          if (bodyText) {
-            try {
-              data = JSON.parse(bodyText);
-            } catch (err) {
-              console.error("JSON Parse failed:", bodyText);
-              throw new Error("Respuesta invalida del servidor.");
-            }
-          }
-          if (!response.ok || !data.ok) {
-            var message = data && data.error ? data.error : ("Error " + response.status);
-            throw new Error(message);
-          }
-          return data;
-        });
-      });
-    }
-
-    // --- CHAT LOGIC ---
-    var currentDocText = "";
-    var currentDetectionResults = [];
-    var chatHistory = [];
-    var chatSection = document.querySelector('[data-chat-section]');
-    var chatMessages = document.querySelector('[data-chat-messages]');
-    var chatInput = document.querySelector('[data-chat-input]');
-    var chatSendBtn = document.querySelector('[data-chat-send]');
-
-    function initChat() {
-      if (chatSendBtn) {
-        // Remove existing listener to avoid duplicates if re-initialized
-        chatSendBtn.removeEventListener("click", sendChatMessage);
-        chatSendBtn.addEventListener("click", sendChatMessage);
-      }
-      if (chatInput) {
-        chatInput.removeEventListener("keydown", chatInputKeyHandler);
-        chatInput.addEventListener("keydown", chatInputKeyHandler);
-      }
-    }
-
-    function chatInputKeyHandler(e) {
-      if (e.key === "Enter") sendChatMessage();
-    }
-
-    // Initialize chat listeners
-    initChat();
-
-    function sendChatMessage() {
-      var message = chatInput.value.trim();
-      if (!message) return;
-
-      // Add user message to UI
-      appendChatMessage("user", message);
-      chatInput.value = "";
-      chatInput.disabled = true;
-      chatSendBtn.disabled = true;
-
-      // Add loading message
-      var loadingId = "loading-" + Date.now();
-      var loadingDiv = document.createElement("div");
-      loadingDiv.id = loadingId;
-      loadingDiv.style.marginBottom = "8px";
-      loadingDiv.style.color = "#94a3b8";
-      loadingDiv.style.fontSize = "12px";
-      loadingDiv.textContent = "AI escribiendo...";
-      chatMessages.appendChild(loadingDiv);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-
-      var headers = { "Content-Type": "application/json" };
-      var token = getCsrfToken();
-      if (token) headers["X-CSRFToken"] = token;
-
-      fetch("/api/pdf/chat", {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify({
-          message: message,
-          document_text: currentDocText,
-          detection_results: currentDetectionResults,
-          chat_history: chatHistory
-        })
-      })
-        .then(function (response) { return response.json(); })
-        .then(function (data) {
-          var loadingEl = document.getElementById(loadingId);
-          if (loadingEl) loadingEl.remove();
-
-          if (data.ok) {
-            appendChatMessage("assistant", data.response);
-            // Update history
-            chatHistory.push({ role: "user", content: message });
-            chatHistory.push({ role: "assistant", content: data.response });
-          } else {
-            appendChatMessage("system", "Error: " + (data.error || "Error desconocido"));
-          }
-        })
-        .catch(function (err) {
-          var loadingEl = document.getElementById(loadingId);
-          if (loadingEl) loadingEl.remove();
-          appendChatMessage("system", "Error de red: " + err.message);
-        })
-        .finally(function () {
-          chatInput.disabled = false;
-          chatSendBtn.disabled = false;
-          chatInput.focus();
-        });
-    }
-
-    function appendChatMessage(role, text) {
-      var div = document.createElement("div");
-      div.style.marginBottom = "10px";
-      div.style.padding = "8px";
-      div.style.borderRadius = "6px";
-      div.style.fontSize = "13px";
-      div.style.lineHeight = "1.4";
-
-      if (role === "user") {
-        div.style.background = "rgba(59, 130, 246, 0.2)"; // Blue tint
-        div.style.marginLeft = "20px";
-        div.style.border = "1px solid rgba(59, 130, 246, 0.3)";
-        div.innerHTML = "<strong>Tú:</strong> " + escapeHtml(text).replace(/\n/g, "<br>");
-      } else if (role === "assistant") {
-        div.style.background = "rgba(16, 185, 129, 0.1)"; // Green tint
-        div.style.marginRight = "20px";
-        div.style.border = "1px solid rgba(16, 185, 129, 0.2)";
-        // Simple markdown formatting for bold
-        var formatted = escapeHtml(text)
-          .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-          .replace(/\n/g, "<br>");
-        div.innerHTML = "<strong>IA:</strong> " + formatted;
-      } else {
-        div.style.color = "#ef4444";
-        div.textContent = text;
-      }
-
-      chatMessages.appendChild(div);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    function collectCandidateGroups(text) {
-      var detectors = [
-        {
-          label: "Telefonos",
-          regex: function () { return /\b(?:\+?\d{2,3}[\s.-]?)?(?:\d[\s.-]?){9,12}\b/g; },
-          filter: function (value) {
-            // Fix: Filter out dates (e.g. 08/03/1980 matches digits logic)
-            if (value.includes("/") || (value.includes("-") && value.length <= 10)) {
-              // Check if looks like date
-              if (/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/.test(value)) return false;
-            }
-            return value.replace(/\D/g, "").length >= 9;
-          }
-        },
-        {
-          label: "Nombres completos / Doctores",
-          regex: function () {
-            // Matches: Dr. Name Surname, or basic Name Surname Name.
-            // Tries to avoid common False Positives like "Data Naixement" by excluding common keywords if possible,
-            // but easier to rely on 'Dr.' prefix being high confidence.
-            return /\b(?:Dr\.|Dra\.|Doctor|Doctora)\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+|\b[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+(?:\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+){1,2}\b/g;
-          },
-          filter: function (value) {
-            var v = value.toLowerCase();
-            // Exclude common header terms
-            if (v.includes("data") || v.includes("fecha") || v.includes("naixement") || v.includes("nacimiento") || v.includes("factura")) return false;
-            return value.split(/\s+/).length >= 2;
-          }
-        },
-        {
-          label: "Fecha Nacimiento/DOB",
-          regex: function () { return /\b(?:Data\s+Naixement|Fecha\s+Nacimiento|DOB|Nasc\.?)\s*:?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})\b/gi; },
-          filter: function (match) {
-            // Extract the date part if check was against full string
-            // But collectMatches logic iterates matches.
-            // If regex has group, we might want the group.
-            // Standard logic uses match[0].
-            // We'll let LLM extract standardized value or user see context.
-            return true;
-          }
-        },
-        {
-          label: "Salud/Historia Clínica",
-          regex: function () { return /\b(?:Num\.|Nº|N\.|No\.)?\s*(?:H\.?C\.?|Hist\.?|Historia|Informe|Colegiado|CIP|Nuhsa)[:\s]*([A-Z0-9-]+)\b|\b(?:Diagn[oó]stico|Prescripci[oó]n|Anal[íi]tica|PCR|SARS|COVID)\b/gi; }
-        },
-        {
-          label: "Direcciones",
-          regex: function () { return /\b(?:calle|c\/|avenida|av\.?|paseo|plaza|plaça|camino|carretera|rbla|rambla)\s+[A-Z\u00C0-\u017Fa-z\u00C0-\u017F0-9\s.,-]{3,60}\b/gi; }
-        },
-        {
-          label: "DNI/NIE",
-          regex: function () { return /\b(?:[XYZ]\d{7}[A-Z]|\d{8}[A-Z])\b/gi; }
-        },
-        {
-          label: "Ocupantes/Censo",
-          regex: function () { return /\b\d+\s+(?:habitants|habitantes|personas|empadronados|empadronades)\b/gi; }
-        },
-        {
-          label: "Telefonos",
-          regex: function () { return /\b(?:(?:\+|00)34\s?)?[6789]\d{2}\s?\d{3}\s?\d{3}\b|\b9\d{2}\s?\d{2}\s?\d{2}\s?\d{2}\b/g; }
-        },
-        {
-          label: "Emails",
-          regex: function () { return /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g; }
-        },
-        {
-          label: "Cuentas Bancarias / IBAN",
-          regex: function () { return /\bES\d{2}\s?\d{4}\s?\d{4}\s?\d{2}\s?\d{10}\b|\b\d{4}\s?\d{4}\s?\d{2}\s?\d{10}\b/g; },
-          filter: function (value) {
-            var clean = value.replace(/[\s-]/g, "");
-            return clean.length >= 20;
-          }
-        },
-        {
-          label: "Nombres de Bancos",
-          regex: function () { return /\b(?:Banco|Banc|Caixa|Caja|ING|BBVA|Santander|Sabadell|Kutxabank|Bankinter|Openbank|N26|Revolut)\s?[\w\.]*\b/gi; }
-        },
-        {
-          label: "Datos Sociales/Vulnerabilidad",
-          regex: function () { return /\b(?:Tarifa|Bono|Canon)\s(?:Social|Vulnerable|Saneamiento)\b|\bVulnerabilidad\b|\bRenta\s(?:Garantizada|M[íi]nima)\b|\bIngreso\sM[íi]nimo\b/gi; }
-        },
-        {
-          label: "Legal/Deudas",
-          regex: function () { return /\b(?:Embargo|Ejecuci[óo]n|Apremio|Sentencia|Juzgado|Deuda|Impago)\b/gi; }
-        },
-        {
-          label: "Códigos/IDs (CUPS, Ref.Cat, Matrícula)",
-          regex: function () { return /\bES[0-9A-Z]{20,22}\b|\b[0-9]{7}[A-Z0-9]{13}\b|\b\d{4}\s?[A-Z]{3}\b/g; }
-        }
-      ];
-
-      var groups = [];
-      detectors.forEach(function (det) {
-        var matches = collectMatches(det.regex, text, det.filter);
-        if (matches.length) {
-          groups.push({
-            label: det.label,
-            entries: matches.map(function (value) {
-              return { value: value };
-            })
-          });
-        }
-      });
-      return groups;
-    }
-
-    function groupByLabel(items) {
-      var grouped = Object.create(null);
-      items.forEach(function (item) {
-        if (!item || !item.label || !item.value) { return; }
-        if (!grouped[item.label]) {
-          grouped[item.label] = [];
-        }
-        grouped[item.label].push({
-          value: item.value,
-          reason: item.reason || "",
-          confidence: item.confidence || ""
-        });
-      });
-      return Object.keys(grouped).map(function (label) {
-        return { label: label, entries: grouped[label] };
-      });
-    }
-
-    // Filter State
-    var currentFilter = 'all'; // all, high, medium
-
-    function setupFilterListeners() {
-      var buttons = document.querySelectorAll('#confidence-filters button');
-      buttons.forEach(function (btn) {
-        btn.addEventListener('click', function (e) {
-          // Update Active State
-          buttons.forEach(function (b) { b.classList.remove('btn-active'); });
-          e.target.classList.add('btn-active');
-
-          // Update Filter
-          currentFilter = e.target.dataset.filter || 'all';
-
-          // Re-render
-          if (latestFindings) {
-            renderResultsList(latestFindings, detectionList, { showReason: true, withSelection: true });
-            updateSelectAllUi();
-          }
-        });
-      });
-    }
-    // Initialize
-    setupFilterListeners();
-
-    function renderResultsList(groups, listEl, options) {
-      if (!groups || !groups.length) {
-        listEl.innerHTML = '<li class="detection-empty">Sin coincidencias.</li>';
-        return;
-      }
-      var maxPerLabel = options && options.maxPerLabel ? options.maxPerLabel : 10;
-      var showReason = !!(options && options.showReason);
-      var withSelection = options && Object.prototype.hasOwnProperty.call(options, "withSelection") ? !!options.withSelection : true;
-
-      // Add Quick Selection Buttons (if not exists already)
-      if (!document.getElementById('quick-selection-controls')) {
-        var container = document.createElement('div');
-        container.id = 'quick-selection-controls';
-        container.className = 'filter-controls';
-        container.style = 'margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;';
-        container.innerHTML =
-          '<span style="font-size: 11px; margin-right: 4px; color: #94a3b8;">Selección Rápida:</span>' +
-          '<button type="button" class="btn-xs" onclick="setSelectionByConfidence([\'high\', \'medium\', \'low\'])">Todo</button>' +
-          '<button type="button" class="btn-xs" onclick="setSelectionByConfidence([\'high\'])">Solo Alta</button>' +
-          '<button type="button" class="btn-xs" onclick="setSelectionByConfidence([\'high\', \'medium\'])">Alta + Media</button>';
-        listEl.parentNode.insertBefore(container, listEl);
-      }
-
-      var htmlContent = groups.map(function (group) {
-        var safeLabel = escapeHtml(group.label || "");
-        var entries = group.entries || [];
-        if (currentFilter !== 'all') {
-          entries = entries.filter(function (e) {
-            var conf = (e.confidence || "low").toLowerCase();
-            if (currentFilter === 'high') return conf === 'high';
-            if (currentFilter === 'medium') return conf === 'high' || conf === 'medium';
-            return true;
-          });
-        }
-        if (!entries.length) return "";
-        entries = entries.slice(0, maxPerLabel);
-
-        // Group Checkbox State
-        var allSelected = true;
-        var anySelected = false;
-        entries.forEach(function (e) {
-          var k = buildEntryKey(group.label, e.value);
-          if (selectionState[k] && selectionState[k].selected) anySelected = true;
-          else allSelected = false;
-        });
-
-        var groupChecked = allSelected ? 'checked' : '';
-        // Indeterminate logic could go here but simpler to just show checked/unchecked for now
-
-        var valuesHtml = entries.map(function (entry) {
-          var details = [];
-          if (showReason && entry.reason) details.push(entry.reason);
-          if (showReason && entry.confidence) details.push("Confianza: " + entry.confidence);
-          var detailHtml = details.length ? '<div class="detection-reason">' + escapeHtml(details.join(". ")) + '</div>' : "";
-          var valueText = entry.value || "";
-          if (withSelection) {
-            var key = buildEntryKey(group.label || "", valueText);
-            var entryState = selectionState[key];
-            var isChecked = entryState ? !!entryState.selected : false;
-            var checkedAttr = isChecked ? " checked" : "";
-            return '<label class="detection-option"><input type="checkbox" class="detection-checkbox" data-entry-key="' + escapeHtml(key) + '" data-group-label="' + safeLabel + '" ' + checkedAttr + ' /><span>' + escapeHtml(valueText) + detailHtml + '</span></label>';
-          }
-          return '<div>' + escapeHtml(valueText) + detailHtml + '</div>';
-        }).join("");
-
-        return '<li><div class="detection-item">' +
-          '<div style="display:flex;align-items:center;min-width:120px;margin-bottom:4px;">' +
-          (withSelection ? '<input type="checkbox" class="group-toggle" data-group-label="' + safeLabel + '" ' + groupChecked + ' style="margin-right:6px;" title="Seleccionar/Deseleccionar grupo" />' : '') +
-          '<span class="detection-tag">' + safeLabel + '</span></div>' +
-          '<div class="detection-values">' + valuesHtml + '</div></div></li>';
-      }).join("");
-
-      if (!htmlContent) {
-        listEl.innerHTML = '<li class="detection-empty">No hay resultados con este filtro.</li>';
-      } else {
-        listEl.innerHTML = htmlContent;
-        listEl.querySelectorAll('.group-toggle').forEach(function (cb) {
-          cb.addEventListener('change', function (e) {
-            toggleGroupSelection(e.target.dataset.groupLabel, e.target.checked);
-          });
-        });
-      }
-    }
-
-
-    // Fix: Add missing showDebugInfo function
-    function showDebugInfo(debugData) {
-      var section = document.getElementById("debug-section");
-      var content = document.getElementById("debug-content");
-      if (!section || !content) return;
-
-      if (!debugData) {
-        section.classList.add("is-hidden");
-        content.textContent = "";
-        return;
-      }
-
-      section.classList.remove("is-hidden");
-      try {
-        content.textContent = JSON.stringify(debugData, null, 2);
-      } catch (e) {
-        content.textContent = "Error parsing debug data: " + e.message;
-      }
-    }
-
-    // Helper for robust redaction matching
-    function shouldRedactItem(text, redactionTerms) {
-      var normText = normalizeTerm(text);
-      if (!normText || normText.length < 2) return false; // Ignore artifacts
-
-      for (var i = 0; i < redactionTerms.length; i++) {
-        var term = redactionTerms[i];
-        var normTerm = normalizeTerm(term);
-        if (!normTerm) continue;
-
-        // 1. Exact match (normalized)
-        if (normText === normTerm) return true;
-
-        // 2. Text contains Term (e.g. "Name: John Doe" contains "John Doe")
-        if (normText.includes(normTerm)) return true;
-
-        // 3. Term contains Text (e.g. "John Doe" contains "John") -> Only if text is significant
-        if (normTerm.includes(normText)) {
-          // Heuristic: Text must be a strictly significant part (e.g. > 3 chars or digit-heavy)
-          if (normText.length > 3) return true;
-          if (/\d/.test(normText) && normText.length >= 2) return true;
-        }
-      }
-      return false;
-    }
-
-    function toggleGroupSelection(groupLabel, isSelected) {
-      // Fix: Use global document selector since listEl reference is lost in closure
-      var listEl = document.getElementById("detection-list");
-      if (!listEl) return;
-
-      var groupCheckboxes = listEl.querySelectorAll('.detection-checkbox[data-group-label="' + groupLabel.replace(/"/g, '\\"') + '"]');
-      groupCheckboxes.forEach(function (cb) {
-        if (cb.checked !== isSelected) {
-          cb.checked = isSelected;
-          var key = cb.dataset.entryKey;
-          if (selectionState[key]) {
-            selectionState[key].selected = isSelected;
-          }
-        }
-      });
-      updateSelectAllUi();
-    }
-
-
-    function prepareSelectionState(groups) {
-      selectionState = Object.create(null);
-      if (!groups || !groups.length) { return; }
-      groups.forEach(function (group) {
-        if (!group || !group.entries) { return; }
-        group.entries.forEach(function (entry) {
-          if (!entry || !entry.value) { return; }
-          var key = buildEntryKey(group.label || "", entry.value);
-          selectionState[key] = {
-            label: group.label || "",
-            value: (entry.value || "").trim(),
-            selected: true
-          };
-        });
-      });
-    }
-
-    function clearSelections() {
-      selectionState = Object.create(null);
-      detectionList.querySelectorAll('input[data-entry-key]').forEach(function (input) {
-        input.checked = false;
-      });
-      if (selectAllCheckbox) {
-        selectAllCheckbox.checked = false;
-        selectAllCheckbox.indeterminate = false;
-      }
-      if (selectAllContainer) {
-        selectAllContainer.classList.add("is-hidden");
-      }
-      if (detectionSummary && detectionSummary.dataset) {
-        delete detectionSummary.dataset.baseMessage;
-      }
-    }
-
-    function updateSelectAllUi() {
-      if (!selectAllCheckbox) { return; }
-      var keys = Object.keys(selectionState);
-      if (!keys.length) {
-        selectAllCheckbox.checked = false;
-        selectAllCheckbox.indeterminate = false;
-        return;
-      }
-      var selectedCount = 0;
-      keys.forEach(function (key) {
-        var entry = selectionState[key];
-        if (entry && entry.selected) {
-          selectedCount++;
-        }
-      });
-      if (selectedCount === 0) {
-        selectAllCheckbox.checked = false;
-        selectAllCheckbox.indeterminate = false;
-      } else if (selectedCount === keys.length) {
-        selectAllCheckbox.checked = true;
-        selectAllCheckbox.indeterminate = false;
-      } else {
-        selectAllCheckbox.checked = false;
-        selectAllCheckbox.indeterminate = true;
-      }
-    }
-
-    function showSelectAllControls(show) {
-      if (!selectAllContainer) { return; }
-      if (show) {
-        selectAllContainer.classList.remove("is-hidden");
-      } else {
-        selectAllContainer.classList.add("is-hidden");
-      }
-    }
-
-    function showDebugInfo(traces) {
-      if (!debugContainer || !debugContent) return;
-      if (!traces || !traces.length) {
-        debugContainer.style.display = "none";
-        debugContent.innerHTML = "";
-        return;
-      }
-      debugContainer.style.display = "block";
-      var html = traces.map(function (t, idx) {
-        var err = t.error ? ('<span style="color:#f87171">ERROR: ' + escapeHtml(t.error) + '</span>\n') : '';
-        return '<strong>[' + idx + '] ' + escapeHtml(t.model || "?") + ' - ' + escapeHtml(t.timestamp || "") + '</strong>\n' +
-          err +
-          '--- SYSTEM PROMPT ---\n' + escapeHtml(t.input_system || "") + '\n\n' +
-          '--- USER PROMPT ---\n' + escapeHtml(t.input_user || "") + '\n\n' +
-          '--- OUTPUT RAW ---\n' + escapeHtml(t.output_raw || "<empty>") + '\n\n' +
-          '========================================\n\n';
-      }).join("");
-      debugContent.innerHTML = html;
-    }
-
-    function buildEntryKey(label, value) {
-      return encodeURIComponent(label || "") + "::" + encodeURIComponent(value || "");
-    }
-
-    function decodeEntryKey(key) {
-      if (!key) { return { label: "", value: "" }; }
-      var parts = key.split("::");
-      var label = "";
-      var value = "";
-      if (parts.length) {
-        try {
-          label = decodeURIComponent(parts[0] || "");
-        } catch (err) {
-          label = parts[0] || "";
-        }
-        if (parts.length > 1) {
-          try {
-            value = decodeURIComponent(parts.slice(1).join("::"));
-          } catch (error) {
-            value = parts.slice(1).join("::");
           }
         }
       }
-      return { label: label, value: value };
+      return redactedRects;
+    } catch (e) {
+      console.error("Error calc coords", e);
+      return [];
     }
+  }
 
-    function normalizeTerm(str) {
-      if (!str) return "";
-      return str.replace(/\s+/g, " ").trim().toLowerCase();
-    }
-
-    function setSelectionByConfidence(levels) {
-      var keys = Object.keys(selectionState);
-      keys.forEach(function (key) {
-        var found = findEntryInGroups(selectionState[key].label, selectionState[key].value);
-        if (found) {
-          var conf = (found.confidence || 'low').toLowerCase();
-          if (levels.includes(conf)) {
-            selectionState[key].selected = true;
-          } else {
-            selectionState[key].selected = false;
-          }
-        }
-      });
-      updateCheckboxesFromState();
-      updateSelectAllUi();
-    }
-
-    function findEntryInGroups(label, value) {
-      if (!latestFindings) return null;
-      for (var i = 0; i < latestFindings.length; i++) {
-        var g = latestFindings[i];
-        if (g.label === label) {
-          for (var j = 0; j < g.entries.length; j++) {
-            var e = g.entries[j];
-            if (e.value === value) return e;
-          }
-        }
-      }
+  async function generateRedactedPdfBytes(pdfBytes, findings, redactionTerms) {
+    if (!window.PDFLib) {
+      alert("La librería PDF-Lib no se ha cargado correctamente.");
       return null;
     }
 
-    function updateCheckboxesFromState() {
-      var checkboxes = document.querySelectorAll('.detection-checkbox');
-      checkboxes.forEach(function (cb) {
+    // DEBUG: Verificar entrada
+    try {
+      if (pdfBytes && pdfBytes.length > 4) {
+        var header = String.fromCharCode(pdfBytes[0], pdfBytes[1], pdfBytes[2], pdfBytes[3]);
+        if (header !== "%PDF") {
+          console.error("Invalid PDF Header:", header);
+          alert("El archivo en memoria no parece ser un PDF válido. Intenta recargar.");
+          return null;
+        }
+      }
+    } catch (e) {
+      console.error("Debug Error:", e);
+    }
+
+    try {
+      // Clonamos para evitar problemas de referencia o modificación
+      var pdfCopy = new Uint8Array(pdfBytes);
+      var pdfDoc = await PDFLib.PDFDocument.load(pdfCopy, { ignoreEncryption: true });
+      var pages = pdfDoc.getPages();
+
+      if (!currentPdfDoc) {
+        alert("Error interno: documento PDF.js no disponible.");
+        return null;
+      }
+
+      for (var pgIdx = 0; pgIdx < pages.length; pgIdx++) {
+        var page = pages[pgIdx];
+        var pdfJsPage = await currentPdfDoc.getPage(pgIdx + 1); // 1-based
+        var textContent = await pdfJsPage.getTextContent();
+
+        for (var item of textContent.items) {
+          var text = item.str;
+          if (!text) continue;
+
+          var shouldRedact = shouldRedactItem(text, redactionTerms);
+          if (shouldRedact) {
+            var tx = item.transform[4];
+            var ty = item.transform[5];
+            var itemWidth = item.width || 0;
+            var fontSize = Math.sqrt(item.transform[0] * item.transform[0] + item.transform[1] * item.transform[1]);
+
+            page.drawRectangle({
+              x: tx,
+              y: ty,
+              width: itemWidth,
+              height: fontSize,
+              color: PDFLib.rgb(0, 0, 0),
+              opacity: 1,
+            });
+          }
+        }
+      }
+
+      // ---- DRAW MANUAL RECT REDACTIONS ----
+      // Get rect redactions from manualRedactions array
+      var rectRedactions = [];
+      if (typeof manualRedactions !== 'undefined' && manualRedactions.length) {
+        rectRedactions = manualRedactions.filter(function (r) { return r.type === 'rect' && r.coords; });
+      }
+
+      if (rectRedactions.length > 0) {
+        for (var rIdx = 0; rIdx < rectRedactions.length; rIdx++) {
+          var redact = rectRedactions[rIdx];
+          var coords = redact.coords;
+          var pageIdx = (coords.page || 1) - 1; // Convert to 0-based
+
+          if (pageIdx >= 0 && pageIdx < pages.length) {
+            var targetPage = pages[pageIdx];
+            var pageSize = targetPage.getSize();
+
+            // Convert ratio (0-1) to PDF coordinates using PDFLib's page dimensions
+            var xRatio = coords.xRatio || 0;
+            var yRatio = coords.yRatio || 0;
+            var wRatio = coords.wRatio || 0;
+            var hRatio = coords.hRatio || 0;
+
+            var pdfX = xRatio * pageSize.width;
+            var pdfW = wRatio * pageSize.width;
+            var pdfH = hRatio * pageSize.height;
+            // Flip Y: ratio is from top, PDF is from bottom
+            var pdfY = pageSize.height - (yRatio * pageSize.height) - pdfH;
+
+            targetPage.drawRectangle({
+              x: pdfX,
+              y: pdfY,
+              width: pdfW,
+              height: pdfH,
+              color: PDFLib.rgb(0, 0, 0),
+              opacity: 1,
+            });
+          }
+        }
+      }
+
+      var pdfBytesModified = await pdfDoc.save();
+      return pdfBytesModified;
+
+    } catch (e) {
+      console.error(e);
+      alert("Error generando PDF censurado: " + e.message);
+      return null;
+    }
+  }
+
+  function downloadBlob(data, fileName, mimeType) {
+    var blob = new Blob([data], { type: mimeType });
+    var url = window.URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.style.display = "none";
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
+
+  detectionList.addEventListener("change", function (event) {
+    var target = event.target;
+    if (!target || !target.matches('input[data-entry-key]')) { return; }
+    var key = target.getAttribute("data-entry-key");
+    if (!key) { return; }
+    var entry = selectionState[key];
+    if (!entry) {
+      var decoded = decodeEntryKey(key);
+      selectionState[key] = {
+        label: decoded.label || "",
+        value: (decoded.value || "").trim(),
+        selected: target.checked
+      };
+    } else {
+      entry.selected = target.checked;
+    }
+    updateSelectAllUi();
+    if (detectionSummary && detectionSummary.dataset && detectionSummary.dataset.baseMessage) {
+      detectionSummary.textContent = detectionSummary.dataset.baseMessage;
+    }
+  });
+
+  selectAllCheckbox.addEventListener("change", function () {
+    var checked = !!selectAllCheckbox.checked;
+    var keys = Object.keys(selectionState);
+    if (keys.length) {
+      keys.forEach(function (key) {
+        if (!selectionState[key]) { return; }
+        selectionState[key].selected = checked;
+      });
+    }
+    detectionList.querySelectorAll('input[data-entry-key]').forEach(function (input) {
+      input.checked = checked;
+    });
+    selectAllCheckbox.indeterminate = false;
+    if (detectionSummary && detectionSummary.dataset && detectionSummary.dataset.baseMessage) {
+      detectionSummary.textContent = detectionSummary.dataset.baseMessage;
+    }
+  });
+
+  window.addEventListener("beforeunload", destroyCurrentPdf);
+
+  function processSensitiveData(fullText) {
+    // Simplified: send text directly to AI without regex pre-filtering
+    if (!fullText || !fullText.trim()) {
+      detectionSummary.textContent = "No hay texto para analizar.";
+      detectionList.innerHTML = '<li class="detection-empty">Sin texto.</li>';
+      applyHighlights(null);
+      activeRedactions = [];
+      clearSelections();
+      showSelectAllControls(false);
+      showDebugInfo(null);
+      obfuscateButton.disabled = true;
+
+      // Hide chat
+      if (chatSection) chatSection.style.display = 'none';
+      return Promise.resolve();
+    }
+
+    // Update chat context
+    currentDocText = fullText;
+
+    detectionSummary.textContent = "Analizando documento con IA...";
+    detectionList.innerHTML = '<li class="detection-empty">Esperando respuesta de IA...</li>';
+
+    return callAiValidation(fullText)
+      .then(function (aiData) {
+        // Update chat context with results
+        currentDetectionResults = aiData.sensitive || [];
+        chatHistory = []; // Reset history for new document
+
+        // Show chat section and reset UI
+        if (chatSection) {
+          chatSection.style.display = 'block';
+          chatMessages.innerHTML = '<p style="color: #94a3b8; font-size: 12px; margin: 0; padding: 8px;">Pregunta a la IA sobre sus decisiones de detección...</p>';
+        }
+
+        if (aiData && aiData.debug) {
+          showDebugInfo(aiData.debug);
+        }
+        if (aiData && aiData.sensitive && aiData.sensitive.length) {
+          var grouped = groupByLabel(aiData.sensitive);
+          prepareSelectionState(grouped);
+          renderResultsList(grouped, detectionList, { showReason: true, withSelection: true });
+          updateSelectAllUi();
+          showSelectAllControls(true);
+          obfuscateButton.disabled = false;
+          activeRedactions = [];
+          var total = grouped.reduce(function (acc, item) {
+            return acc + (item.entries ? item.entries.length : 0);
+          }, 0);
+          var note = aiData.model ? " (modelo " + aiData.model + ")" : "";
+          detectionSummary.textContent = "La IA encontro " + total + " dato(s) sensible(s)" + note + ".";
+          detectionSummary.dataset.baseMessage = detectionSummary.textContent;
+          applyHighlights(grouped, { redactionTerms: [] });
+          return;
+        }
+        detectionSummary.textContent = "La IA no identifico datos sensibles en el documento.";
+        detectionList.innerHTML = '<li class="detection-empty">Sin datos sensibles encontrados.</li>';
+        activeRedactions = [];
+        clearSelections();
+        showSelectAllControls(false);
+        obfuscateButton.disabled = true;
+        applyHighlights(null);
+      })
+      .catch(function (err) {
+        console.error(err);
+        detectionSummary.textContent = "Error al analizar con IA: " + err.message;
+        detectionList.innerHTML = '<li class="detection-empty">Error en el analisis.</li>';
+        activeRedactions = [];
+        clearSelections();
+        showSelectAllControls(false);
+        obfuscateButton.disabled = true;
+
+        // Hide chat on error
+        if (chatSection) chatSection.style.display = 'none';
+      });
+  }
+
+  function callAiValidation(fullText) {
+    // Simplified: just send the text, AI will find all sensitive data
+    var headers = { "Content-Type": "application/json" };
+    var token = getCsrfToken();
+    if (token) {
+      headers["X-CSRFToken"] = token;
+    }
+    return fetch("/api/pdf/analyze", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: headers,
+      body: JSON.stringify({ text: fullText })
+    }).then(function (response) {
+      return response.text().then(function (bodyText) {
+        console.log("API Status:", response.status);
+        console.log("API Response:", bodyText);
+
+        // Show in debug panel
+        var debugContainer = document.querySelector('[data-debug-container]');
+        var debugContent = document.querySelector('[data-debug-content]');
+        if (debugContainer && debugContent) {
+          debugContainer.style.display = 'block';
+          debugContent.textContent = "=== API Response ===\nStatus: " + response.status +
+            "\n\n=== Body ===\n" + bodyText.substring(0, 2000);
+        }
+
+        var data = {};
+        if (bodyText) {
+          try {
+            data = JSON.parse(bodyText);
+          } catch (err) {
+            console.error("JSON Parse failed:", bodyText);
+            throw new Error("Respuesta invalida del servidor.");
+          }
+        }
+        if (!response.ok || !data.ok) {
+          var message = data && data.error ? data.error : ("Error " + response.status);
+          throw new Error(message);
+        }
+        return data;
+      });
+    });
+  }
+
+  // --- CHAT LOGIC ---
+  var currentDocText = "";
+  var currentDetectionResults = [];
+  var chatHistory = [];
+  var chatSection = document.querySelector('[data-chat-section]');
+  var chatMessages = document.querySelector('[data-chat-messages]');
+  var chatInput = document.querySelector('[data-chat-input]');
+  var chatSendBtn = document.querySelector('[data-chat-send]');
+
+  function initChat() {
+    if (chatSendBtn) {
+      // Remove existing listener to avoid duplicates if re-initialized
+      chatSendBtn.removeEventListener("click", sendChatMessage);
+      chatSendBtn.addEventListener("click", sendChatMessage);
+    }
+    if (chatInput) {
+      chatInput.removeEventListener("keydown", chatInputKeyHandler);
+      chatInput.addEventListener("keydown", chatInputKeyHandler);
+    }
+  }
+
+  function chatInputKeyHandler(e) {
+    if (e.key === "Enter") sendChatMessage();
+  }
+
+  // Initialize chat listeners
+  initChat();
+
+  function sendChatMessage() {
+    var message = chatInput.value.trim();
+    if (!message) return;
+
+    // Add user message to UI
+    appendChatMessage("user", message);
+    chatInput.value = "";
+    chatInput.disabled = true;
+    chatSendBtn.disabled = true;
+
+    // Add loading message
+    var loadingId = "loading-" + Date.now();
+    var loadingDiv = document.createElement("div");
+    loadingDiv.id = loadingId;
+    loadingDiv.style.marginBottom = "8px";
+    loadingDiv.style.color = "#94a3b8";
+    loadingDiv.style.fontSize = "12px";
+    loadingDiv.textContent = "AI escribiendo...";
+    chatMessages.appendChild(loadingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    var headers = { "Content-Type": "application/json" };
+    var token = getCsrfToken();
+    if (token) headers["X-CSRFToken"] = token;
+
+    fetch("/api/pdf/chat", {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify({
+        message: message,
+        document_text: currentDocText,
+        detection_results: currentDetectionResults,
+        chat_history: chatHistory
+      })
+    })
+      .then(function (response) { return response.json(); })
+      .then(function (data) {
+        var loadingEl = document.getElementById(loadingId);
+        if (loadingEl) loadingEl.remove();
+
+        if (data.ok) {
+          appendChatMessage("assistant", data.response);
+          // Update history
+          chatHistory.push({ role: "user", content: message });
+          chatHistory.push({ role: "assistant", content: data.response });
+        } else {
+          appendChatMessage("system", "Error: " + (data.error || "Error desconocido"));
+        }
+      })
+      .catch(function (err) {
+        var loadingEl = document.getElementById(loadingId);
+        if (loadingEl) loadingEl.remove();
+        appendChatMessage("system", "Error de red: " + err.message);
+      })
+      .finally(function () {
+        chatInput.disabled = false;
+        chatSendBtn.disabled = false;
+        chatInput.focus();
+      });
+  }
+
+  function appendChatMessage(role, text) {
+    var div = document.createElement("div");
+    div.style.marginBottom = "10px";
+    div.style.padding = "8px";
+    div.style.borderRadius = "6px";
+    div.style.fontSize = "13px";
+    div.style.lineHeight = "1.4";
+
+    if (role === "user") {
+      div.style.background = "rgba(59, 130, 246, 0.2)"; // Blue tint
+      div.style.marginLeft = "20px";
+      div.style.border = "1px solid rgba(59, 130, 246, 0.3)";
+      div.innerHTML = "<strong>Tú:</strong> " + escapeHtml(text).replace(/\n/g, "<br>");
+    } else if (role === "assistant") {
+      div.style.background = "rgba(16, 185, 129, 0.1)"; // Green tint
+      div.style.marginRight = "20px";
+      div.style.border = "1px solid rgba(16, 185, 129, 0.2)";
+      // Simple markdown formatting for bold
+      var formatted = escapeHtml(text)
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\n/g, "<br>");
+      div.innerHTML = "<strong>IA:</strong> " + formatted;
+    } else {
+      div.style.color = "#ef4444";
+      div.textContent = text;
+    }
+
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function collectCandidateGroups(text) {
+    var detectors = [
+      {
+        label: "Telefonos",
+        regex: function () { return /\b(?:\+?\d{2,3}[\s.-]?)?(?:\d[\s.-]?){9,12}\b/g; },
+        filter: function (value) {
+          // Fix: Filter out dates (e.g. 08/03/1980 matches digits logic)
+          if (value.includes("/") || (value.includes("-") && value.length <= 10)) {
+            // Check if looks like date
+            if (/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/.test(value)) return false;
+          }
+          return value.replace(/\D/g, "").length >= 9;
+        }
+      },
+      {
+        label: "Nombres completos / Doctores",
+        regex: function () {
+          // Matches: Dr. Name Surname, or basic Name Surname Name.
+          // Tries to avoid common False Positives like "Data Naixement" by excluding common keywords if possible,
+          // but easier to rely on 'Dr.' prefix being high confidence.
+          return /\b(?:Dr\.|Dra\.|Doctor|Doctora)\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+|\b[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+(?:\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+){1,2}\b/g;
+        },
+        filter: function (value) {
+          var v = value.toLowerCase();
+          // Exclude common header terms
+          if (v.includes("data") || v.includes("fecha") || v.includes("naixement") || v.includes("nacimiento") || v.includes("factura")) return false;
+          return value.split(/\s+/).length >= 2;
+        }
+      },
+      {
+        label: "Fecha Nacimiento/DOB",
+        regex: function () { return /\b(?:Data\s+Naixement|Fecha\s+Nacimiento|DOB|Nasc\.?)\s*:?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})\b/gi; },
+        filter: function (match) {
+          // Extract the date part if check was against full string
+          // But collectMatches logic iterates matches.
+          // If regex has group, we might want the group.
+          // Standard logic uses match[0].
+          // We'll let LLM extract standardized value or user see context.
+          return true;
+        }
+      },
+      {
+        label: "Salud/Historia Clínica",
+        regex: function () { return /\b(?:Num\.|Nº|N\.|No\.)?\s*(?:H\.?C\.?|Hist\.?|Historia|Informe|Colegiado|CIP|Nuhsa)[:\s]*([A-Z0-9-]+)\b|\b(?:Diagn[oó]stico|Prescripci[oó]n|Anal[íi]tica|PCR|SARS|COVID)\b/gi; }
+      },
+      {
+        label: "Direcciones",
+        regex: function () { return /\b(?:calle|c\/|avenida|av\.?|paseo|plaza|plaça|camino|carretera|rbla|rambla)\s+[A-Z\u00C0-\u017Fa-z\u00C0-\u017F0-9\s.,-]{3,60}\b/gi; }
+      },
+      {
+        label: "DNI/NIE",
+        regex: function () { return /\b(?:[XYZ]\d{7}[A-Z]|\d{8}[A-Z])\b/gi; }
+      },
+      {
+        label: "Ocupantes/Censo",
+        regex: function () { return /\b\d+\s+(?:habitants|habitantes|personas|empadronados|empadronades)\b/gi; }
+      },
+      {
+        label: "Telefonos",
+        regex: function () { return /\b(?:(?:\+|00)34\s?)?[6789]\d{2}\s?\d{3}\s?\d{3}\b|\b9\d{2}\s?\d{2}\s?\d{2}\s?\d{2}\b/g; }
+      },
+      {
+        label: "Emails",
+        regex: function () { return /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g; }
+      },
+      {
+        label: "Cuentas Bancarias / IBAN",
+        regex: function () { return /\bES\d{2}\s?\d{4}\s?\d{4}\s?\d{2}\s?\d{10}\b|\b\d{4}\s?\d{4}\s?\d{2}\s?\d{10}\b/g; },
+        filter: function (value) {
+          var clean = value.replace(/[\s-]/g, "");
+          return clean.length >= 20;
+        }
+      },
+      {
+        label: "Nombres de Bancos",
+        regex: function () { return /\b(?:Banco|Banc|Caixa|Caja|ING|BBVA|Santander|Sabadell|Kutxabank|Bankinter|Openbank|N26|Revolut)\s?[\w\.]*\b/gi; }
+      },
+      {
+        label: "Datos Sociales/Vulnerabilidad",
+        regex: function () { return /\b(?:Tarifa|Bono|Canon)\s(?:Social|Vulnerable|Saneamiento)\b|\bVulnerabilidad\b|\bRenta\s(?:Garantizada|M[íi]nima)\b|\bIngreso\sM[íi]nimo\b/gi; }
+      },
+      {
+        label: "Legal/Deudas",
+        regex: function () { return /\b(?:Embargo|Ejecuci[óo]n|Apremio|Sentencia|Juzgado|Deuda|Impago)\b/gi; }
+      },
+      {
+        label: "Códigos/IDs (CUPS, Ref.Cat, Matrícula)",
+        regex: function () { return /\bES[0-9A-Z]{20,22}\b|\b[0-9]{7}[A-Z0-9]{13}\b|\b\d{4}\s?[A-Z]{3}\b/g; }
+      }
+    ];
+
+    var groups = [];
+    detectors.forEach(function (det) {
+      var matches = collectMatches(det.regex, text, det.filter);
+      if (matches.length) {
+        groups.push({
+          label: det.label,
+          entries: matches.map(function (value) {
+            return { value: value };
+          })
+        });
+      }
+    });
+    return groups;
+  }
+
+  function groupByLabel(items) {
+    var grouped = Object.create(null);
+    items.forEach(function (item) {
+      if (!item || !item.label || !item.value) { return; }
+      if (!grouped[item.label]) {
+        grouped[item.label] = [];
+      }
+      grouped[item.label].push({
+        value: item.value,
+        reason: item.reason || "",
+        confidence: item.confidence || ""
+      });
+    });
+    return Object.keys(grouped).map(function (label) {
+      return { label: label, entries: grouped[label] };
+    });
+  }
+
+  // Filter State
+  var currentFilter = 'all'; // all, high, medium
+
+  function setupFilterListeners() {
+    var buttons = document.querySelectorAll('#confidence-filters button');
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        // Update Active State
+        buttons.forEach(function (b) { b.classList.remove('btn-active'); });
+        e.target.classList.add('btn-active');
+
+        // Update Filter
+        currentFilter = e.target.dataset.filter || 'all';
+
+        // Re-render
+        if (latestFindings) {
+          renderResultsList(latestFindings, detectionList, { showReason: true, withSelection: true });
+          updateSelectAllUi();
+        }
+      });
+    });
+  }
+  // Initialize
+  setupFilterListeners();
+
+  function renderResultsList(groups, listEl, options) {
+    if (!groups || !groups.length) {
+      listEl.innerHTML = '<li class="detection-empty">Sin coincidencias.</li>';
+      return;
+    }
+    var maxPerLabel = options && options.maxPerLabel ? options.maxPerLabel : 10;
+    var showReason = !!(options && options.showReason);
+    var withSelection = options && Object.prototype.hasOwnProperty.call(options, "withSelection") ? !!options.withSelection : true;
+
+    // Add Quick Selection Buttons (if not exists already)
+    if (!document.getElementById('quick-selection-controls')) {
+      var container = document.createElement('div');
+      container.id = 'quick-selection-controls';
+      container.className = 'filter-controls';
+      container.style = 'margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;';
+      container.innerHTML =
+        '<span style="font-size: 11px; margin-right: 4px; color: #94a3b8;">Selección Rápida:</span>' +
+        '<button type="button" class="btn-xs" onclick="setSelectionByConfidence([\'high\', \'medium\', \'low\'])">Todo</button>' +
+        '<button type="button" class="btn-xs" onclick="setSelectionByConfidence([\'high\'])">Solo Alta</button>' +
+        '<button type="button" class="btn-xs" onclick="setSelectionByConfidence([\'high\', \'medium\'])">Alta + Media</button>';
+      listEl.parentNode.insertBefore(container, listEl);
+    }
+
+    var htmlContent = groups.map(function (group) {
+      var safeLabel = escapeHtml(group.label || "");
+      var entries = group.entries || [];
+      if (currentFilter !== 'all') {
+        entries = entries.filter(function (e) {
+          var conf = (e.confidence || "low").toLowerCase();
+          if (currentFilter === 'high') return conf === 'high';
+          if (currentFilter === 'medium') return conf === 'high' || conf === 'medium';
+          return true;
+        });
+      }
+      if (!entries.length) return "";
+      entries = entries.slice(0, maxPerLabel);
+
+      // Group Checkbox State
+      var allSelected = true;
+      var anySelected = false;
+      entries.forEach(function (e) {
+        var k = buildEntryKey(group.label, e.value);
+        if (selectionState[k] && selectionState[k].selected) anySelected = true;
+        else allSelected = false;
+      });
+
+      var groupChecked = allSelected ? 'checked' : '';
+      // Indeterminate logic could go here but simpler to just show checked/unchecked for now
+
+      var valuesHtml = entries.map(function (entry) {
+        var details = [];
+        if (showReason && entry.reason) details.push(entry.reason);
+        if (showReason && entry.confidence) details.push("Confianza: " + entry.confidence);
+        var detailHtml = details.length ? '<div class="detection-reason">' + escapeHtml(details.join(". ")) + '</div>' : "";
+        var valueText = entry.value || "";
+        if (withSelection) {
+          var key = buildEntryKey(group.label || "", valueText);
+          var entryState = selectionState[key];
+          var isChecked = entryState ? !!entryState.selected : false;
+          var checkedAttr = isChecked ? " checked" : "";
+          return '<label class="detection-option"><input type="checkbox" class="detection-checkbox" data-entry-key="' + escapeHtml(key) + '" data-group-label="' + safeLabel + '" ' + checkedAttr + ' /><span>' + escapeHtml(valueText) + detailHtml + '</span></label>';
+        }
+        return '<div>' + escapeHtml(valueText) + detailHtml + '</div>';
+      }).join("");
+
+      return '<li><div class="detection-item">' +
+        '<div style="display:flex;align-items:center;min-width:120px;margin-bottom:4px;">' +
+        (withSelection ? '<input type="checkbox" class="group-toggle" data-group-label="' + safeLabel + '" ' + groupChecked + ' style="margin-right:6px;" title="Seleccionar/Deseleccionar grupo" />' : '') +
+        '<span class="detection-tag">' + safeLabel + '</span></div>' +
+        '<div class="detection-values">' + valuesHtml + '</div></div></li>';
+    }).join("");
+
+    if (!htmlContent) {
+      listEl.innerHTML = '<li class="detection-empty">No hay resultados con este filtro.</li>';
+    } else {
+      listEl.innerHTML = htmlContent;
+      listEl.querySelectorAll('.group-toggle').forEach(function (cb) {
+        cb.addEventListener('change', function (e) {
+          toggleGroupSelection(e.target.dataset.groupLabel, e.target.checked);
+        });
+      });
+    }
+  }
+
+
+  // Fix: Add missing showDebugInfo function
+  function showDebugInfo(debugData) {
+    var section = document.getElementById("debug-section");
+    var content = document.getElementById("debug-content");
+    if (!section || !content) return;
+
+    if (!debugData) {
+      section.classList.add("is-hidden");
+      content.textContent = "";
+      return;
+    }
+
+    section.classList.remove("is-hidden");
+    try {
+      content.textContent = JSON.stringify(debugData, null, 2);
+    } catch (e) {
+      content.textContent = "Error parsing debug data: " + e.message;
+    }
+  }
+
+  // Helper for robust redaction matching
+  function shouldRedactItem(text, redactionTerms) {
+    var normText = normalizeTerm(text);
+    if (!normText || normText.length < 2) return false; // Ignore artifacts
+
+    for (var i = 0; i < redactionTerms.length; i++) {
+      var term = redactionTerms[i];
+      var normTerm = normalizeTerm(term);
+      if (!normTerm) continue;
+
+      // 1. Exact match (normalized)
+      if (normText === normTerm) return true;
+
+      // 2. Text contains Term (e.g. "Name: John Doe" contains "John Doe")
+      if (normText.includes(normTerm)) return true;
+
+      // 3. Term contains Text (e.g. "John Doe" contains "John") -> Only if text is significant
+      if (normTerm.includes(normText)) {
+        // Heuristic: Text must be a strictly significant part (e.g. > 3 chars or digit-heavy)
+        if (normText.length > 3) return true;
+        if (/\d/.test(normText) && normText.length >= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  function toggleGroupSelection(groupLabel, isSelected) {
+    // Fix: Use global document selector since listEl reference is lost in closure
+    var listEl = document.getElementById("detection-list");
+    if (!listEl) return;
+
+    var groupCheckboxes = listEl.querySelectorAll('.detection-checkbox[data-group-label="' + groupLabel.replace(/"/g, '\\"') + '"]');
+    groupCheckboxes.forEach(function (cb) {
+      if (cb.checked !== isSelected) {
+        cb.checked = isSelected;
         var key = cb.dataset.entryKey;
         if (selectionState[key]) {
-          cb.checked = selectionState[key].selected;
+          selectionState[key].selected = isSelected;
         }
-      });
-    }
+      }
+    });
+    updateSelectAllUi();
+  }
 
-    function getSelectedValues() {
-      var values = [];
-      var seen = Object.create(null);
-      Object.keys(selectionState).forEach(function (key) {
-        var entry = selectionState[key];
-        if (!entry || !entry.selected) { return; }
-        var value = entry.value ? entry.value.trim() : "";
-        if (value) {
-          var normalized = normalizeTerm(value);
+
+  function prepareSelectionState(groups) {
+    selectionState = Object.create(null);
+    if (!groups || !groups.length) { return; }
+    groups.forEach(function (group) {
+      if (!group || !group.entries) { return; }
+      group.entries.forEach(function (entry) {
+        if (!entry || !entry.value) { return; }
+        var key = buildEntryKey(group.label || "", entry.value);
+        selectionState[key] = {
+          label: group.label || "",
+          value: (entry.value || "").trim(),
+          selected: true
+        };
+      });
+    });
+  }
+
+  function clearSelections() {
+    selectionState = Object.create(null);
+    detectionList.querySelectorAll('input[data-entry-key]').forEach(function (input) {
+      input.checked = false;
+    });
+    if (selectAllCheckbox) {
+      selectAllCheckbox.checked = false;
+      selectAllCheckbox.indeterminate = false;
+    }
+    if (selectAllContainer) {
+      selectAllContainer.classList.add("is-hidden");
+    }
+    if (detectionSummary && detectionSummary.dataset) {
+      delete detectionSummary.dataset.baseMessage;
+    }
+  }
+
+  function updateSelectAllUi() {
+    if (!selectAllCheckbox) { return; }
+    var keys = Object.keys(selectionState);
+    if (!keys.length) {
+      selectAllCheckbox.checked = false;
+      selectAllCheckbox.indeterminate = false;
+      return;
+    }
+    var selectedCount = 0;
+    keys.forEach(function (key) {
+      var entry = selectionState[key];
+      if (entry && entry.selected) {
+        selectedCount++;
+      }
+    });
+    if (selectedCount === 0) {
+      selectAllCheckbox.checked = false;
+      selectAllCheckbox.indeterminate = false;
+    } else if (selectedCount === keys.length) {
+      selectAllCheckbox.checked = true;
+      selectAllCheckbox.indeterminate = false;
+    } else {
+      selectAllCheckbox.checked = false;
+      selectAllCheckbox.indeterminate = true;
+    }
+  }
+
+  function showSelectAllControls(show) {
+    if (!selectAllContainer) { return; }
+    if (show) {
+      selectAllContainer.classList.remove("is-hidden");
+    } else {
+      selectAllContainer.classList.add("is-hidden");
+    }
+  }
+
+  function showDebugInfo(traces) {
+    if (!debugContainer || !debugContent) return;
+    if (!traces || !traces.length) {
+      debugContainer.style.display = "none";
+      debugContent.innerHTML = "";
+      return;
+    }
+    debugContainer.style.display = "block";
+    var html = traces.map(function (t, idx) {
+      var err = t.error ? ('<span style="color:#f87171">ERROR: ' + escapeHtml(t.error) + '</span>\n') : '';
+      return '<strong>[' + idx + '] ' + escapeHtml(t.model || "?") + ' - ' + escapeHtml(t.timestamp || "") + '</strong>\n' +
+        err +
+        '--- SYSTEM PROMPT ---\n' + escapeHtml(t.input_system || "") + '\n\n' +
+        '--- USER PROMPT ---\n' + escapeHtml(t.input_user || "") + '\n\n' +
+        '--- OUTPUT RAW ---\n' + escapeHtml(t.output_raw || "<empty>") + '\n\n' +
+        '========================================\n\n';
+    }).join("");
+    debugContent.innerHTML = html;
+  }
+
+  function buildEntryKey(label, value) {
+    return encodeURIComponent(label || "") + "::" + encodeURIComponent(value || "");
+  }
+
+  function decodeEntryKey(key) {
+    if (!key) { return { label: "", value: "" }; }
+    var parts = key.split("::");
+    var label = "";
+    var value = "";
+    if (parts.length) {
+      try {
+        label = decodeURIComponent(parts[0] || "");
+      } catch (err) {
+        label = parts[0] || "";
+      }
+      if (parts.length > 1) {
+        try {
+          value = decodeURIComponent(parts.slice(1).join("::"));
+        } catch (error) {
+          value = parts.slice(1).join("::");
+        }
+      }
+    }
+    return { label: label, value: value };
+  }
+
+  function normalizeTerm(str) {
+    if (!str) return "";
+    return str.replace(/\s+/g, " ").trim().toLowerCase();
+  }
+
+  function setSelectionByConfidence(levels) {
+    var keys = Object.keys(selectionState);
+    keys.forEach(function (key) {
+      var found = findEntryInGroups(selectionState[key].label, selectionState[key].value);
+      if (found) {
+        var conf = (found.confidence || 'low').toLowerCase();
+        if (levels.includes(conf)) {
+          selectionState[key].selected = true;
+        } else {
+          selectionState[key].selected = false;
+        }
+      }
+    });
+    updateCheckboxesFromState();
+    updateSelectAllUi();
+  }
+
+  function findEntryInGroups(label, value) {
+    if (!latestFindings) return null;
+    for (var i = 0; i < latestFindings.length; i++) {
+      var g = latestFindings[i];
+      if (g.label === label) {
+        for (var j = 0; j < g.entries.length; j++) {
+          var e = g.entries[j];
+          if (e.value === value) return e;
+        }
+      }
+    }
+    return null;
+  }
+
+  function updateCheckboxesFromState() {
+    var checkboxes = document.querySelectorAll('.detection-checkbox');
+    checkboxes.forEach(function (cb) {
+      var key = cb.dataset.entryKey;
+      if (selectionState[key]) {
+        cb.checked = selectionState[key].selected;
+      }
+    });
+  }
+
+  function getSelectedValues() {
+    var values = [];
+    var seen = Object.create(null);
+    Object.keys(selectionState).forEach(function (key) {
+      var entry = selectionState[key];
+      if (!entry || !entry.selected) { return; }
+      var value = entry.value ? entry.value.trim() : "";
+      if (value) {
+        var normalized = normalizeTerm(value);
+        if (!seen[normalized]) {
+          seen[normalized] = true;
+          values.push(value);
+        }
+      }
+    });
+    // Include manual text redactions
+    if (typeof manualRedactions !== 'undefined' && manualRedactions.length) {
+      manualRedactions.forEach(function (r) {
+        if (r.type === 'text' && r.value) {
+          var normalized = normalizeTerm(r.value);
           if (!seen[normalized]) {
             seen[normalized] = true;
-            values.push(value);
+            values.push(r.value);
           }
         }
       });
-      // Include manual text redactions
-      if (typeof manualRedactions !== 'undefined' && manualRedactions.length) {
-        manualRedactions.forEach(function (r) {
-          if (r.type === 'text' && r.value) {
-            var normalized = normalizeTerm(r.value);
-            if (!seen[normalized]) {
-              seen[normalized] = true;
-              values.push(r.value);
-            }
+    }
+    return values;
+  }
+
+  function getCsrfToken() {
+    return csrfMeta ? csrfMeta.getAttribute("content") : null;
+  }
+
+  function isPdfFile(file) {
+    var name = file && file.name ? file.name : "";
+    return file && (file.type === "application/pdf" || /\.pdf$/i.test(name));
+  }
+
+  function resetViewer() {
+    if (renderer) {
+      renderer.innerHTML = "";
+      renderer.classList.remove("is-visible");
+      renderer.scrollTop = 0;
+    }
+    if (placeholder) {
+      placeholder.classList.remove("is-hidden");
+    }
+    container.classList.remove("has-file");
+    renderedPages = [];
+    latestFindings = null;
+    activeRedactions = [];
+  }
+
+  function destroyCurrentPdf() {
+    if (currentPdfDoc && typeof currentPdfDoc.destroy === "function") {
+      try { currentPdfDoc.destroy(); } catch (err) { console.warn(err); }
+    }
+    currentPdfDoc = null;
+  }
+
+  function renderPdfDocument(uint8) {
+    if (!renderer) {
+      return Promise.resolve();
+    }
+    resetViewer();
+    return ensurePdfJs().then(function (pdfjs) {
+      return pdfjs.getDocument({ data: uint8 }).promise.then(function (doc) {
+        destroyCurrentPdf();
+        currentPdfDoc = doc;
+        var totalPages = doc.numPages;
+        renderedPages = new Array(totalPages);
+        var renderTasks = [];
+
+        for (var pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+          renderTasks.push(
+            doc.getPage(pageNumber).then(function (page) {
+              var viewport = page.getViewport({ scale: 1.3 });
+              var wrapper = document.createElement("div");
+              wrapper.className = "pdf-page-render";
+              wrapper.style.width = viewport.width + "px";
+              wrapper.style.height = viewport.height + "px";
+
+              var canvas = document.createElement("canvas");
+              canvas.width = viewport.width;
+              canvas.height = viewport.height;
+              canvas.className = "pdf-canvas";
+              wrapper.appendChild(canvas);
+
+              var textLayer = document.createElement("div");
+              textLayer.className = "pdf-text-layer";
+              textLayer.style.width = viewport.width + "px";
+              textLayer.style.height = viewport.height + "px";
+              wrapper.appendChild(textLayer);
+
+              renderer.appendChild(wrapper);
+
+              var canvasContext = canvas.getContext("2d");
+              var renderTask = page.render({ canvasContext: canvasContext, viewport: viewport });
+
+              var textDivs = [];
+              var textLayerTask = page.getTextContent().then(function (textContent) {
+                return pdfjs.renderTextLayer({
+                  textContent: textContent,
+                  container: textLayer,
+                  viewport: viewport,
+                  textDivs: textDivs,
+                  enhanceTextSelection: false
+                }).promise.then(function () {
+                  textDivs.forEach(function (div) {
+                    div.dataset.rawText = div.textContent || "";
+                  });
+                  renderedPages[page.pageNumber - 1] = { textDivs: textDivs };
+                });
+              });
+
+              return Promise.all([renderTask.promise, textLayerTask]);
+            })
+          );
+        }
+
+        return Promise.all(renderTasks).then(function () {
+          renderer.classList.add("is-visible");
+          renderer.scrollTop = 0;
+          container.classList.add("has-file");
+          if (placeholder) {
+            placeholder.classList.add("is-hidden");
+          }
+          if (latestFindings) {
+            applyHighlights(latestFindings);
+          } else {
+            applyHighlights(null);
           }
         });
-      }
-      return values;
-    }
+      });
+    });
+  }
 
-    function getCsrfToken() {
-      return csrfMeta ? csrfMeta.getAttribute("content") : null;
+  function ensurePdfJs() {
+    if (window.pdfjsLib) {
+      configurePdfWorker();
+      return Promise.resolve(window.pdfjsLib);
     }
-
-    function isPdfFile(file) {
-      var name = file && file.name ? file.name : "";
-      return file && (file.type === "application/pdf" || /\.pdf$/i.test(name));
+    if (!pdfLoaderPromise) {
+      pdfLoaderPromise = new Promise(function (resolve, reject) {
+        var triedFallback = false;
+        function loadScript(src, workerSrc) {
+          var script = document.createElement("script");
+          script.src = src;
+          script.async = true;
+          script.onload = function () {
+            if (window.pdfjsLib) {
+              activeWorkerSrc = workerSrc;
+              configurePdfWorker();
+              resolve(window.pdfjsLib);
+            } else if (!triedFallback && PDFJS_FALLBACK_SRC) {
+              triedFallback = true;
+              loadScript(PDFJS_FALLBACK_SRC, PDFJS_FALLBACK_WORKER_SRC);
+            } else {
+              reject(new Error("No se pudo cargar el analizador de PDF. Revisa tu conexion."));
+            }
+          };
+          script.onerror = function () {
+            if (!triedFallback && PDFJS_FALLBACK_SRC) {
+              triedFallback = true;
+              loadScript(PDFJS_FALLBACK_SRC, PDFJS_FALLBACK_WORKER_SRC);
+            } else {
+              reject(new Error("No se pudo cargar el analizador de PDF. Revisa tu conexion."));
+            }
+          };
+          document.head.appendChild(script);
+        }
+        loadScript(PDFJS_SRC, PDFJS_WORKER_SRC);
+      });
+      pdfLoaderPromise.catch(function () {
+        pdfLoaderPromise = null;
+      });
     }
+    return pdfLoaderPromise;
+  }
 
-    function resetViewer() {
-      if (renderer) {
-        renderer.innerHTML = "";
-        renderer.classList.remove("is-visible");
-        renderer.scrollTop = 0;
+  function configurePdfWorker() {
+    if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = activeWorkerSrc;
+    }
+  }
+
+  function readFileAsArrayBuffer(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function (evt) {
+        resolve(new Uint8Array(evt.target.result));
+      };
+      reader.onerror = function () {
+        reject(new Error("No se pudo leer el archivo PDF."));
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function collectMatches(regexFactory, text, filter) {
+    var regex = regexFactory();
+    var output = [];
+    var seen = Object.create(null);
+    var match;
+    while ((match = regex.exec(text)) !== null) {
+      var value = (match[0] || "").trim();
+      if (!value) { continue; }
+      if (filter && !filter(value)) { continue; }
+      var key = value.toLowerCase();
+      if (!seen[key]) {
+        seen[key] = true;
+        output.push(value);
       }
-      if (placeholder) {
-        placeholder.classList.remove("is-hidden");
-      }
-      container.classList.remove("has-file");
-      renderedPages = [];
-      latestFindings = null;
+    }
+    return output;
+  }
+
+  function applyHighlights(findings, options) {
+    latestFindings = findings && findings.length ? findings : null;
+    if (!latestFindings) {
       activeRedactions = [];
     }
-
-    function destroyCurrentPdf() {
-      if (currentPdfDoc && typeof currentPdfDoc.destroy === "function") {
-        try { currentPdfDoc.destroy(); } catch (err) { console.warn(err); }
-      }
-      currentPdfDoc = null;
+    if (options && Object.prototype.hasOwnProperty.call(options, "redactionTerms")) {
+      activeRedactions = Array.isArray(options.redactionTerms) ? options.redactionTerms.slice() : [];
     }
-
-    function renderPdfDocument(uint8) {
-      if (!renderer) {
-        return Promise.resolve();
-      }
-      resetViewer();
-      return ensurePdfJs().then(function (pdfjs) {
-        return pdfjs.getDocument({ data: uint8 }).promise.then(function (doc) {
-          destroyCurrentPdf();
-          currentPdfDoc = doc;
-          var totalPages = doc.numPages;
-          renderedPages = new Array(totalPages);
-          var renderTasks = [];
-
-          for (var pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
-            renderTasks.push(
-              doc.getPage(pageNumber).then(function (page) {
-                var viewport = page.getViewport({ scale: 1.3 });
-                var wrapper = document.createElement("div");
-                wrapper.className = "pdf-page-render";
-                wrapper.style.width = viewport.width + "px";
-                wrapper.style.height = viewport.height + "px";
-
-                var canvas = document.createElement("canvas");
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                canvas.className = "pdf-canvas";
-                wrapper.appendChild(canvas);
-
-                var textLayer = document.createElement("div");
-                textLayer.className = "pdf-text-layer";
-                textLayer.style.width = viewport.width + "px";
-                textLayer.style.height = viewport.height + "px";
-                wrapper.appendChild(textLayer);
-
-                renderer.appendChild(wrapper);
-
-                var canvasContext = canvas.getContext("2d");
-                var renderTask = page.render({ canvasContext: canvasContext, viewport: viewport });
-
-                var textDivs = [];
-                var textLayerTask = page.getTextContent().then(function (textContent) {
-                  return pdfjs.renderTextLayer({
-                    textContent: textContent,
-                    container: textLayer,
-                    viewport: viewport,
-                    textDivs: textDivs,
-                    enhanceTextSelection: false
-                  }).promise.then(function () {
-                    textDivs.forEach(function (div) {
-                      div.dataset.rawText = div.textContent || "";
-                    });
-                    renderedPages[page.pageNumber - 1] = { textDivs: textDivs };
-                  });
-                });
-
-                return Promise.all([renderTask.promise, textLayerTask]);
-              })
-            );
-          }
-
-          return Promise.all(renderTasks).then(function () {
-            renderer.classList.add("is-visible");
-            renderer.scrollTop = 0;
-            container.classList.add("has-file");
-            if (placeholder) {
-              placeholder.classList.add("is-hidden");
-            }
-            if (latestFindings) {
-              applyHighlights(latestFindings);
-            } else {
-              applyHighlights(null);
-            }
-          });
-        });
-      });
-    }
-
-    function ensurePdfJs() {
-      if (window.pdfjsLib) {
-        configurePdfWorker();
-        return Promise.resolve(window.pdfjsLib);
-      }
-      if (!pdfLoaderPromise) {
-        pdfLoaderPromise = new Promise(function (resolve, reject) {
-          var triedFallback = false;
-          function loadScript(src, workerSrc) {
-            var script = document.createElement("script");
-            script.src = src;
-            script.async = true;
-            script.onload = function () {
-              if (window.pdfjsLib) {
-                activeWorkerSrc = workerSrc;
-                configurePdfWorker();
-                resolve(window.pdfjsLib);
-              } else if (!triedFallback && PDFJS_FALLBACK_SRC) {
-                triedFallback = true;
-                loadScript(PDFJS_FALLBACK_SRC, PDFJS_FALLBACK_WORKER_SRC);
-              } else {
-                reject(new Error("No se pudo cargar el analizador de PDF. Revisa tu conexion."));
-              }
-            };
-            script.onerror = function () {
-              if (!triedFallback && PDFJS_FALLBACK_SRC) {
-                triedFallback = true;
-                loadScript(PDFJS_FALLBACK_SRC, PDFJS_FALLBACK_WORKER_SRC);
-              } else {
-                reject(new Error("No se pudo cargar el analizador de PDF. Revisa tu conexion."));
-              }
-            };
-            document.head.appendChild(script);
-          }
-          loadScript(PDFJS_SRC, PDFJS_WORKER_SRC);
-        });
-        pdfLoaderPromise.catch(function () {
-          pdfLoaderPromise = null;
-        });
-      }
-      return pdfLoaderPromise;
-    }
-
-    function configurePdfWorker() {
-      if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = activeWorkerSrc;
-      }
-    }
-
-    function readFileAsArrayBuffer(file) {
-      return new Promise(function (resolve, reject) {
-        var reader = new FileReader();
-        reader.onload = function (evt) {
-          resolve(new Uint8Array(evt.target.result));
-        };
-        reader.onerror = function () {
-          reject(new Error("No se pudo leer el archivo PDF."));
-        };
-        reader.readAsArrayBuffer(file);
-      });
-    }
-
-    function collectMatches(regexFactory, text, filter) {
-      var regex = regexFactory();
-      var output = [];
-      var seen = Object.create(null);
-      var match;
-      while ((match = regex.exec(text)) !== null) {
-        var value = (match[0] || "").trim();
-        if (!value) { continue; }
-        if (filter && !filter(value)) { continue; }
-        var key = value.toLowerCase();
-        if (!seen[key]) {
-          seen[key] = true;
-          output.push(value);
-        }
-      }
-      return output;
-    }
-
-    function applyHighlights(findings, options) {
-      latestFindings = findings && findings.length ? findings : null;
-      if (!latestFindings) {
-        activeRedactions = [];
-      }
-      if (options && Object.prototype.hasOwnProperty.call(options, "redactionTerms")) {
-        activeRedactions = Array.isArray(options.redactionTerms) ? options.redactionTerms.slice() : [];
-      }
-      var terms = extractHighlightTerms(latestFindings);
-      var redactionLookup = createRedactionLookup(activeRedactions);
-      renderedPages.forEach(function (page) {
-        if (!page || !page.textDivs) { return; }
-        page.textDivs.forEach(function (div) {
-          var original = div.dataset && typeof div.dataset.rawText === "string" ? div.dataset.rawText : (div.textContent || "");
-          if (!terms.length) {
-            if (div.textContent !== original) {
-              div.textContent = original;
-            }
-            return;
-          }
-          var highlighted = buildHighlightedHtml(original, terms, redactionLookup);
-          if (highlighted.changed) {
-            div.innerHTML = highlighted.html;
-          } else if (div.textContent !== original) {
+    var terms = extractHighlightTerms(latestFindings);
+    var redactionLookup = createRedactionLookup(activeRedactions);
+    renderedPages.forEach(function (page) {
+      if (!page || !page.textDivs) { return; }
+      page.textDivs.forEach(function (div) {
+        var original = div.dataset && typeof div.dataset.rawText === "string" ? div.dataset.rawText : (div.textContent || "");
+        if (!terms.length) {
+          if (div.textContent !== original) {
             div.textContent = original;
           }
-        });
+          return;
+        }
+        var highlighted = buildHighlightedHtml(original, terms, redactionLookup);
+        if (highlighted.changed) {
+          div.innerHTML = highlighted.html;
+        } else if (div.textContent !== original) {
+          div.textContent = original;
+        }
       });
-    }
+    });
+  }
 
-    function extractHighlightTerms(findings) {
-      if (!findings || !findings.length) {
-        return [];
-      }
-      var seen = Object.create(null);
-      var terms = [];
-      findings.forEach(function (group) {
-        if (!group || !group.entries) { return; }
-        group.entries.forEach(function (entry) {
-          var term = entry && entry.value ? entry.value.trim() : "";
-          if (!term) { return; }
-          var key = term.toLowerCase();
-          if (!seen[key]) {
-            seen[key] = true;
-            terms.push(term);
-          }
-        });
+  function extractHighlightTerms(findings) {
+    if (!findings || !findings.length) {
+      return [];
+    }
+    var seen = Object.create(null);
+    var terms = [];
+    findings.forEach(function (group) {
+      if (!group || !group.entries) { return; }
+      group.entries.forEach(function (entry) {
+        var term = entry && entry.value ? entry.value.trim() : "";
+        if (!term) { return; }
+        var key = term.toLowerCase();
+        if (!seen[key]) {
+          seen[key] = true;
+          terms.push(term);
+        }
       });
-      return terms;
-    }
+    });
+    return terms;
+  }
 
-    function buildHighlightedHtml(text, terms, redactionLookup) {
-      if (!terms.length) {
-        return { html: escapeHtml(text), changed: false };
-      }
-      var escapedTerms = [];
-      for (var i = 0; i < terms.length; i++) {
-        var term = terms[i];
-        if (term) {
-          escapedTerms.push(escapeRegExp(term));
-        }
-      }
-      if (!escapedTerms.length) {
-        return { html: escapeHtml(text), changed: false };
-      }
-      var pattern = new RegExp("(" + escapedTerms.join("|") + ")", "gi");
-      var match;
-      var lastIndex = 0;
-      var pieces = [];
-      var changed = false;
-      while ((match = pattern.exec(text)) !== null) {
-        var index = match.index;
-        if (index > lastIndex) {
-          pieces.push(escapeHtml(text.slice(lastIndex, index)));
-        }
-        var matchText = match[0];
-        var normalized = normalizeTerm(matchText);
-        var classNames = "pdf-highlight";
-        if (redactionLookup && redactionLookup[normalized]) {
-          classNames += " pdf-redaction";
-        }
-        pieces.push('<span class="' + classNames + '">' + escapeHtml(matchText) + '</span>');
-        lastIndex = index + match[0].length;
-        changed = true;
-      }
-      if (!changed) {
-        return { html: escapeHtml(text), changed: false };
-      }
-      if (lastIndex < text.length) {
-        pieces.push(escapeHtml(text.slice(lastIndex)));
-      }
-      return { html: pieces.join(""), changed: true };
+  function buildHighlightedHtml(text, terms, redactionLookup) {
+    if (!terms.length) {
+      return { html: escapeHtml(text), changed: false };
     }
+    var escapedTerms = [];
+    for (var i = 0; i < terms.length; i++) {
+      var term = terms[i];
+      if (term) {
+        escapedTerms.push(escapeRegExp(term));
+      }
+    }
+    if (!escapedTerms.length) {
+      return { html: escapeHtml(text), changed: false };
+    }
+    var pattern = new RegExp("(" + escapedTerms.join("|") + ")", "gi");
+    var match;
+    var lastIndex = 0;
+    var pieces = [];
+    var changed = false;
+    while ((match = pattern.exec(text)) !== null) {
+      var index = match.index;
+      if (index > lastIndex) {
+        pieces.push(escapeHtml(text.slice(lastIndex, index)));
+      }
+      var matchText = match[0];
+      var normalized = normalizeTerm(matchText);
+      var classNames = "pdf-highlight";
+      if (redactionLookup && redactionLookup[normalized]) {
+        classNames += " pdf-redaction";
+      }
+      pieces.push('<span class="' + classNames + '">' + escapeHtml(matchText) + '</span>');
+      lastIndex = index + match[0].length;
+      changed = true;
+    }
+    if (!changed) {
+      return { html: escapeHtml(text), changed: false };
+    }
+    if (lastIndex < text.length) {
+      pieces.push(escapeHtml(text.slice(lastIndex)));
+    }
+    return { html: pieces.join(""), changed: true };
+  }
 
-    function createRedactionLookup(terms) {
-      var lookup = Object.create(null);
-      if (!terms || !terms.length) {
-        return lookup;
-      }
-      for (var i = 0; i < terms.length; i++) {
-        var normalized = normalizeTerm(terms[i]);
-        if (normalized) {
-          lookup[normalized] = true;
-        }
-      }
+  function createRedactionLookup(terms) {
+    var lookup = Object.create(null);
+    if (!terms || !terms.length) {
       return lookup;
     }
-
-    function normalizeTerm(value) {
-      if (value === null || value === undefined) { return ""; }
-      return String(value).trim().toLowerCase();
-    }
-
-    function escapeRegExp(value) {
-      return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    }
-
-    function escapeHtml(value) {
-      return value.replace(/[&<>"']/g, function (ch) {
-        switch (ch) {
-          case "&": return "&amp;";
-          case "<": return "&lt;";
-          case ">": return "&gt;";
-          case '"': return "&quot;";
-          case "'": return "&#39;";
-          default: return ch;
-        }
-      });
-    }
-
-    // ============================================================
-    // MANUAL REDACTION TOOLS
-    // ============================================================
-
-    var manualRedactions = [];
-    var currentTool = null; // 'click', 'search', 'draw', or null
-    var drawState = { isDrawing: false, startX: 0, startY: 0, currentPage: 1 };
-
-    // DOM elements for manual tools
-    var manualToolbar = document.getElementById('manual-redact-toolbar');
-    var searchPanel = document.getElementById('search-panel');
-    var searchInput = document.getElementById('search-input');
-    var searchBtn = document.getElementById('search-btn');
-    var searchResults = document.getElementById('search-results');
-    var manualRedactionsPanel = document.getElementById('manual-redactions-panel');
-    var manualRedactionsList = document.getElementById('manual-redactions-list');
-    var clearManualBtn = document.getElementById('clear-manual-redactions');
-
-    // Initialize toolbar buttons
-    if (manualToolbar) {
-      var toolButtons = manualToolbar.querySelectorAll('.btn-tool');
-      toolButtons.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var tool = btn.getAttribute('data-tool');
-          setActiveTool(currentTool === tool ? null : tool);
-        });
-      });
-    }
-
-    function setActiveTool(tool) {
-      currentTool = tool;
-
-      // Update button states
-      var toolButtons = manualToolbar ? manualToolbar.querySelectorAll('.btn-tool') : [];
-      toolButtons.forEach(function (btn) {
-        btn.classList.toggle('active', btn.getAttribute('data-tool') === tool);
-      });
-
-      // Show/hide search panel
-      if (searchPanel) {
-        searchPanel.style.display = tool === 'search' ? 'block' : 'none';
+    for (var i = 0; i < terms.length; i++) {
+      var normalized = normalizeTerm(terms[i]);
+      if (normalized) {
+        lookup[normalized] = true;
       }
+    }
+    return lookup;
+  }
 
-      // Update container cursor
-      if (container) {
-        container.classList.remove('click-mode', 'draw-mode');
-        if (tool === 'click') container.classList.add('click-mode');
-        if (tool === 'draw') container.classList.add('draw-mode');
+  function normalizeTerm(value) {
+    if (value === null || value === undefined) { return ""; }
+    return String(value).trim().toLowerCase();
+  }
+
+  function escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function escapeHtml(value) {
+    return value.replace(/[&<>"']/g, function (ch) {
+      switch (ch) {
+        case "&": return "&amp;";
+        case "<": return "&lt;";
+        case ">": return "&gt;";
+        case '"': return "&quot;";
+        case "'": return "&#39;";
+        default: return ch;
       }
+    });
+  }
 
-      // Manage overlays for click and draw modes
-      manageInteractionOverlay(tool);
+  // ============================================================
+  // MANUAL REDACTION TOOLS
+  // ============================================================
 
-      // Re-init lucide icons
-      if (window.lucide) window.lucide.createIcons();
+  var manualRedactions = [];
+  var currentTool = null; // 'click', 'search', 'draw', or null
+  var drawState = { isDrawing: false, startX: 0, startY: 0, currentPage: 1 };
+
+  // DOM elements for manual tools
+  var manualToolbar = document.getElementById('manual-redact-toolbar');
+  var searchPanel = document.getElementById('search-panel');
+  var searchInput = document.getElementById('search-input');
+  var searchBtn = document.getElementById('search-btn');
+  var searchResults = document.getElementById('search-results');
+  var manualRedactionsPanel = document.getElementById('manual-redactions-panel');
+  var manualRedactionsList = document.getElementById('manual-redactions-list');
+  var clearManualBtn = document.getElementById('clear-manual-redactions');
+
+  // Initialize toolbar buttons
+  if (manualToolbar) {
+    var toolButtons = manualToolbar.querySelectorAll('.btn-tool');
+    toolButtons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var tool = btn.getAttribute('data-tool');
+        setActiveTool(currentTool === tool ? null : tool);
+      });
+    });
+  }
+
+  function setActiveTool(tool) {
+    currentTool = tool;
+
+    // Update button states
+    var toolButtons = manualToolbar ? manualToolbar.querySelectorAll('.btn-tool') : [];
+    toolButtons.forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-tool') === tool);
+    });
+
+    // Show/hide search panel
+    if (searchPanel) {
+      searchPanel.style.display = tool === 'search' ? 'block' : 'none';
     }
 
-    // ---- UNIFIED INTERACTION OVERLAY ----
-    var interactionOverlay = null;
-    var overlayHint = null;
+    // Update container cursor
+    if (container) {
+      container.classList.remove('click-mode', 'draw-mode');
+      if (tool === 'click') container.classList.add('click-mode');
+      if (tool === 'draw') container.classList.add('draw-mode');
+    }
 
-    function manageInteractionOverlay(tool) {
-      // Remove existing overlay
-      if (interactionOverlay) {
-        interactionOverlay.remove();
-        interactionOverlay = null;
-        overlayHint = null;
-        drawPreview = null;
-      }
+    // Manage overlays for click and draw modes
+    manageInteractionOverlay(tool);
 
-      // Remove click capture panel if exists
-      var existingClickPanel = document.getElementById('click-capture-panel');
-      if (existingClickPanel) existingClickPanel.remove();
+    // Re-init lucide icons
+    if (window.lucide) window.lucide.createIcons();
+  }
 
-      if (!tool || tool === 'search') return;
-      if (!container) return;
+  // ---- UNIFIED INTERACTION OVERLAY ----
+  var interactionOverlay = null;
+  var overlayHint = null;
 
-      // For CLICK mode: show a floating panel with text input
-      if (tool === 'click') {
-        var clickPanel = document.createElement('div');
-        clickPanel.id = 'click-capture-panel';
-        clickPanel.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(30,41,59,0.98);color:white;padding:14px 20px;border-radius:10px;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,0.4);border:1px solid #475569;';
-        clickPanel.innerHTML = '' +
-          '<div style="margin-bottom:10px;font-weight:600;display:flex;align-items:center;gap:8px;">' +
-          '  <span style="font-size:18px;">✏️</span> Añadir texto a censurar' +
-          '</div>' +
-          '<div style="display:flex;gap:8px;">' +
-          '  <input type="text" id="click-text-input" placeholder="Escribe o pega el texto aquí..." style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:white;font-size:13px;min-width:250px;">' +
-          '  <button type="button" id="click-add-btn" style="background:#3b82f6;color:white;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer;white-space:nowrap;">Añadir</button>' +
-          '</div>' +
-          '<div style="margin-top:8px;font-size:11px;color:#94a3b8;">💡 Copia texto del PDF (Ctrl+C) y pégalo aquí (Ctrl+V)</div>';
-        container.appendChild(clickPanel);
+  function manageInteractionOverlay(tool) {
+    // Remove existing overlay
+    if (interactionOverlay) {
+      interactionOverlay.remove();
+      interactionOverlay = null;
+      overlayHint = null;
+      drawPreview = null;
+    }
 
-        // Add button handler
-        var addBtn = document.getElementById('click-add-btn');
-        var textInput = document.getElementById('click-text-input');
+    // Remove click capture panel if exists
+    var existingClickPanel = document.getElementById('click-capture-panel');
+    if (existingClickPanel) existingClickPanel.remove();
 
-        addBtn.addEventListener('click', function () {
-          addTextFromInput();
-        });
+    if (!tool || tool === 'search') return;
+    if (!container) return;
 
-        textInput.addEventListener('keypress', function (e) {
-          if (e.key === 'Enter') addTextFromInput();
-        });
+    // For CLICK mode: show a floating panel with text input
+    if (tool === 'click') {
+      var clickPanel = document.createElement('div');
+      clickPanel.id = 'click-capture-panel';
+      clickPanel.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(30,41,59,0.98);color:white;padding:14px 20px;border-radius:10px;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,0.4);border:1px solid #475569;';
+      clickPanel.innerHTML = '' +
+        '<div style="margin-bottom:10px;font-weight:600;display:flex;align-items:center;gap:8px;">' +
+        '  <span style="font-size:18px;">✏️</span> Añadir texto a censurar' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;">' +
+        '  <input type="text" id="click-text-input" placeholder="Escribe o pega el texto aquí..." style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:white;font-size:13px;min-width:250px;">' +
+        '  <button type="button" id="click-add-btn" style="background:#3b82f6;color:white;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer;white-space:nowrap;">Añadir</button>' +
+        '</div>' +
+        '<div style="margin-top:8px;font-size:11px;color:#94a3b8;">💡 Copia texto del PDF (Ctrl+C) y pégalo aquí (Ctrl+V)</div>';
+      container.appendChild(clickPanel);
 
-        function addTextFromInput() {
-          var text = textInput.value.trim();
-          if (!text) {
-            alert('Escribe o pega el texto que quieres censurar.');
-            return;
-          }
+      // Add button handler
+      var addBtn = document.getElementById('click-add-btn');
+      var textInput = document.getElementById('click-text-input');
 
-          addManualRedaction({ type: 'text', value: text, label: 'Manual' });
-          textInput.value = '';
-          textInput.focus();
+      addBtn.addEventListener('click', function () {
+        addTextFromInput();
+      });
 
-          // Visual feedback
-          addBtn.textContent = '✓ Añadido!';
-          addBtn.style.background = '#22c55e';
-          setTimeout(function () {
-            addBtn.textContent = 'Añadir';
-            addBtn.style.background = '#3b82f6';
-          }, 1000);
+      textInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') addTextFromInput();
+      });
+
+      function addTextFromInput() {
+        var text = textInput.value.trim();
+        if (!text) {
+          alert('Escribe o pega el texto que quieres censurar.');
+          return;
         }
 
-        // Focus input
-        setTimeout(function () { textInput.focus(); }, 100);
-        return;
-      }
+        addManualRedaction({ type: 'text', value: text, label: 'Manual' });
+        textInput.value = '';
+        textInput.focus();
 
-      // For DRAW mode: create blocking overlay
-      interactionOverlay = document.createElement('div');
-      interactionOverlay.className = 'draw-overlay active';
-      interactionOverlay.id = 'interaction-overlay';
-
-      // Add hint for draw
-      overlayHint = document.createElement('div');
-      overlayHint.className = 'overlay-hint';
-      overlayHint.textContent = 'Arrastra para dibujar un rectángulo';
-
-      // Create preview rect for draw mode
-      drawPreview = document.createElement('div');
-      drawPreview.className = 'draw-rect-preview';
-      drawPreview.style.display = 'none';
-      interactionOverlay.appendChild(drawPreview);
-      interactionOverlay.appendChild(overlayHint);
-      container.appendChild(interactionOverlay);
-
-      // Event handlers for draw
-      interactionOverlay.addEventListener('mousedown', onDrawStart);
-      interactionOverlay.addEventListener('mousemove', onDrawMove);
-      interactionOverlay.addEventListener('mouseup', onDrawEnd);
-      interactionOverlay.addEventListener('mouseleave', onDrawEnd);
-
-      // Hide hint after first interaction
-      interactionOverlay.addEventListener('mousedown', function () {
-        if (overlayHint) overlayHint.style.display = 'none';
-      }, { once: true });
-    }
-
-    // ---- CLICK MODE: Capture text selection ----
-    function onCaptureSelection() {
-      var selection = window.getSelection();
-      var selectedText = selection ? selection.toString().trim() : '';
-
-      if (!selectedText) {
-        alert('No hay texto seleccionado. Selecciona texto en el PDF primero.');
-        return;
-      }
-
-      // Verify text exists in document (optional validation)
-      if (documentFullText && !documentFullText.toLowerCase().includes(selectedText.toLowerCase())) {
-        // Text might be from PDF viewer which we can't access, add anyway
-        console.warn('Selected text not found in extracted text, adding anyway');
-      }
-
-      addManualRedaction({ type: 'text', value: selectedText, label: 'Selección manual' });
-
-      // Clear selection
-      if (selection) selection.removeAllRanges();
-
-      // Visual feedback
-      var btn = document.getElementById('capture-selection-btn');
-      if (btn) {
-        var orig = btn.textContent;
-        btn.textContent = '✓ Añadido!';
-        btn.style.background = '#22c55e';
+        // Visual feedback
+        addBtn.textContent = '✓ Añadido!';
+        addBtn.style.background = '#22c55e';
         setTimeout(function () {
-          btn.textContent = orig;
-          btn.style.background = 'white';
-        }, 1500);
+          addBtn.textContent = 'Añadir';
+          addBtn.style.background = '#3b82f6';
+        }, 1000);
       }
+
+      // Focus input
+      setTimeout(function () { textInput.focus(); }, 100);
+      return;
     }
 
-    // ---- SEARCH MODE ----
-    if (searchBtn) {
-      searchBtn.addEventListener('click', performSearch);
+    // For DRAW mode: create blocking overlay
+    interactionOverlay = document.createElement('div');
+    interactionOverlay.className = 'draw-overlay active';
+    interactionOverlay.id = 'interaction-overlay';
+
+    // Add hint for draw
+    overlayHint = document.createElement('div');
+    overlayHint.className = 'overlay-hint';
+    overlayHint.textContent = 'Arrastra para dibujar un rectángulo';
+
+    // Create preview rect for draw mode
+    drawPreview = document.createElement('div');
+    drawPreview.className = 'draw-rect-preview';
+    drawPreview.style.display = 'none';
+    interactionOverlay.appendChild(drawPreview);
+    interactionOverlay.appendChild(overlayHint);
+    container.appendChild(interactionOverlay);
+
+    // Event handlers for draw
+    interactionOverlay.addEventListener('mousedown', onDrawStart);
+    interactionOverlay.addEventListener('mousemove', onDrawMove);
+    interactionOverlay.addEventListener('mouseup', onDrawEnd);
+    interactionOverlay.addEventListener('mouseleave', onDrawEnd);
+
+    // Hide hint after first interaction
+    interactionOverlay.addEventListener('mousedown', function () {
+      if (overlayHint) overlayHint.style.display = 'none';
+    }, { once: true });
+  }
+
+  // ---- CLICK MODE: Capture text selection ----
+  function onCaptureSelection() {
+    var selection = window.getSelection();
+    var selectedText = selection ? selection.toString().trim() : '';
+
+    if (!selectedText) {
+      alert('No hay texto seleccionado. Selecciona texto en el PDF primero.');
+      return;
     }
-    if (searchInput) {
-      searchInput.addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') performSearch();
+
+    // Verify text exists in document (optional validation)
+    if (documentFullText && !documentFullText.toLowerCase().includes(selectedText.toLowerCase())) {
+      // Text might be from PDF viewer which we can't access, add anyway
+      console.warn('Selected text not found in extracted text, adding anyway');
+    }
+
+    addManualRedaction({ type: 'text', value: selectedText, label: 'Selección manual' });
+
+    // Clear selection
+    if (selection) selection.removeAllRanges();
+
+    // Visual feedback
+    var btn = document.getElementById('capture-selection-btn');
+    if (btn) {
+      var orig = btn.textContent;
+      btn.textContent = '✓ Añadido!';
+      btn.style.background = '#22c55e';
+      setTimeout(function () {
+        btn.textContent = orig;
+        btn.style.background = 'white';
+      }, 1500);
+    }
+  }
+
+  // ---- SEARCH MODE ----
+  if (searchBtn) {
+    searchBtn.addEventListener('click', performSearch);
+  }
+  if (searchInput) {
+    searchInput.addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') performSearch();
+    });
+  }
+
+  function performSearch() {
+    if (!searchInput || !searchResults) return;
+    var query = searchInput.value.trim();
+    if (!query) {
+      searchResults.innerHTML = '<div style="color:#94a3b8;font-size:12px;">Escribe algo para buscar</div>';
+      return;
+    }
+    if (!documentFullText) {
+      searchResults.innerHTML = '<div style="color:#f87171;font-size:12px;">Primero carga un PDF</div>';
+      return;
+    }
+
+    // Find all occurrences
+    var regex = new RegExp(escapeRegExp(query), 'gi');
+    var matches = [];
+    var match;
+    while ((match = regex.exec(documentFullText)) !== null) {
+      matches.push({
+        value: match[0],
+        index: match.index,
+        context: documentFullText.slice(Math.max(0, match.index - 20), match.index + match[0].length + 20)
       });
     }
 
-    function performSearch() {
-      if (!searchInput || !searchResults) return;
-      var query = searchInput.value.trim();
-      if (!query) {
-        searchResults.innerHTML = '<div style="color:#94a3b8;font-size:12px;">Escribe algo para buscar</div>';
-        return;
-      }
-      if (!documentFullText) {
-        searchResults.innerHTML = '<div style="color:#f87171;font-size:12px;">Primero carga un PDF</div>';
-        return;
-      }
+    if (!matches.length) {
+      searchResults.innerHTML = '<div style="color:#94a3b8;font-size:12px;">No se encontraron coincidencias</div>';
+      return;
+    }
 
-      // Find all occurrences
-      var regex = new RegExp(escapeRegExp(query), 'gi');
-      var matches = [];
-      var match;
-      while ((match = regex.exec(documentFullText)) !== null) {
-        matches.push({
-          value: match[0],
-          index: match.index,
-          context: documentFullText.slice(Math.max(0, match.index - 20), match.index + match[0].length + 20)
+    // Render results
+    var html = '<div style="margin-bottom:6px;font-size:11px;color:#94a3b8;">' + matches.length + ' coincidencia(s)</div>';
+    html += '<button type="button" class="btn-xs" id="add-all-search" style="margin-bottom:8px;">Añadir todas</button>';
+    matches.forEach(function (m, i) {
+      var isAdded = manualRedactions.some(function (r) { return r.value === m.value && r.type === 'text'; });
+      html += '<div class="search-result-item' + (isAdded ? ' selected' : '') + '" data-search-idx="' + i + '">';
+      html += '<span>..."' + escapeHtml(m.context).replace(new RegExp(escapeRegExp(m.value), 'gi'), '<strong>' + escapeHtml(m.value) + '</strong>') + '"...</span>';
+      html += '</div>';
+    });
+    searchResults.innerHTML = html;
+
+    // Store matches for click handler
+    searchResults._matches = matches;
+
+    // Add all button handler
+    var addAllBtn = document.getElementById('add-all-search');
+    if (addAllBtn) {
+      addAllBtn.addEventListener('click', function () {
+        matches.forEach(function (m) {
+          addManualRedaction({ type: 'text', value: m.value, label: 'Búsqueda' });
         });
-      }
-
-      if (!matches.length) {
-        searchResults.innerHTML = '<div style="color:#94a3b8;font-size:12px;">No se encontraron coincidencias</div>';
-        return;
-      }
-
-      // Render results
-      var html = '<div style="margin-bottom:6px;font-size:11px;color:#94a3b8;">' + matches.length + ' coincidencia(s)</div>';
-      html += '<button type="button" class="btn-xs" id="add-all-search" style="margin-bottom:8px;">Añadir todas</button>';
-      matches.forEach(function (m, i) {
-        var isAdded = manualRedactions.some(function (r) { return r.value === m.value && r.type === 'text'; });
-        html += '<div class="search-result-item' + (isAdded ? ' selected' : '') + '" data-search-idx="' + i + '">';
-        html += '<span>..."' + escapeHtml(m.context).replace(new RegExp(escapeRegExp(m.value), 'gi'), '<strong>' + escapeHtml(m.value) + '</strong>') + '"...</span>';
-        html += '</div>';
+        performSearch(); // Refresh display
       });
-      searchResults.innerHTML = html;
+    }
 
-      // Store matches for click handler
-      searchResults._matches = matches;
+    // Click on individual result
+    searchResults.querySelectorAll('.search-result-item').forEach(function (item) {
+      item.addEventListener('click', function () {
+        var idx = parseInt(item.getAttribute('data-search-idx'));
+        var m = matches[idx];
+        if (m) {
+          addManualRedaction({ type: 'text', value: m.value, label: 'Búsqueda' });
+          item.classList.add('selected');
+        }
+      });
+    });
+  }
 
-      // Add all button handler
-      var addAllBtn = document.getElementById('add-all-search');
-      if (addAllBtn) {
-        addAllBtn.addEventListener('click', function () {
-          matches.forEach(function (m) {
-            addManualRedaction({ type: 'text', value: m.value, label: 'Búsqueda' });
-          });
-          performSearch(); // Refresh display
-        });
-      }
+  // ---- DRAW MODE HANDLERS ----
+  var drawPreview = null;
 
-      // Click on individual result
-      searchResults.querySelectorAll('.search-result-item').forEach(function (item) {
-        item.addEventListener('click', function () {
-          var idx = parseInt(item.getAttribute('data-search-idx'));
-          var m = matches[idx];
-          if (m) {
-            addManualRedaction({ type: 'text', value: m.value, label: 'Búsqueda' });
-            item.classList.add('selected');
+  function onDrawStart(e) {
+    if (!interactionOverlay) return;
+    var rect = interactionOverlay.getBoundingClientRect();
+    drawState.isDrawing = true;
+    drawState.startX = e.clientX - rect.left;
+    drawState.startY = e.clientY - rect.top;
+    if (drawPreview) {
+      drawPreview.style.left = drawState.startX + 'px';
+      drawPreview.style.top = drawState.startY + 'px';
+      drawPreview.style.width = '0';
+      drawPreview.style.height = '0';
+      drawPreview.style.display = 'block';
+    }
+  }
+
+  function onDrawMove(e) {
+    if (!drawState.isDrawing || !interactionOverlay || !drawPreview) return;
+    var rect = interactionOverlay.getBoundingClientRect();
+    var currentX = e.clientX - rect.left;
+    var currentY = e.clientY - rect.top;
+
+    var x = Math.min(drawState.startX, currentX);
+    var y = Math.min(drawState.startY, currentY);
+    var w = Math.abs(currentX - drawState.startX);
+    var h = Math.abs(currentY - drawState.startY);
+
+    drawPreview.style.left = x + 'px';
+    drawPreview.style.top = y + 'px';
+    drawPreview.style.width = w + 'px';
+    drawPreview.style.height = h + 'px';
+  }
+
+  async function onDrawEnd(e) {
+    if (!drawState.isDrawing || !interactionOverlay) return;
+    drawState.isDrawing = false;
+
+    if (drawPreview) {
+      var x = parseFloat(drawPreview.style.left);
+      var y = parseFloat(drawPreview.style.top);
+      var w = parseFloat(drawPreview.style.width);
+      var h = parseFloat(drawPreview.style.height);
+
+      if (w > 10 && h > 10) {
+        // Get overlay dimensions
+        var overlayRect = interactionOverlay.getBoundingClientRect();
+
+        // Store as simple percentages (0-1) relative to overlay
+        // The actual PDF coordinate conversion will happen in generateRedactedPdfBytes
+        // using PDFLib's page dimensions which are the authoritative source
+        addManualRedaction({
+          type: 'rect',
+          label: 'Área dibujada',
+          value: 'Rectángulo (' + Math.round(w) + 'x' + Math.round(h) + ' px)',
+          coords: {
+            page: 1,
+            // Store raw percentage positions (0-1 range)
+            xRatio: x / overlayRect.width,
+            yRatio: y / overlayRect.height,
+            wRatio: w / overlayRect.width,
+            hRatio: h / overlayRect.height
           }
         });
-      });
-    }
-
-    // ---- DRAW MODE HANDLERS ----
-    var drawPreview = null;
-
-    function onDrawStart(e) {
-      if (!interactionOverlay) return;
-      var rect = interactionOverlay.getBoundingClientRect();
-      drawState.isDrawing = true;
-      drawState.startX = e.clientX - rect.left;
-      drawState.startY = e.clientY - rect.top;
-      if (drawPreview) {
-        drawPreview.style.left = drawState.startX + 'px';
-        drawPreview.style.top = drawState.startY + 'px';
-        drawPreview.style.width = '0';
-        drawPreview.style.height = '0';
-        drawPreview.style.display = 'block';
-      }
-    }
-
-    function onDrawMove(e) {
-      if (!drawState.isDrawing || !interactionOverlay || !drawPreview) return;
-      var rect = interactionOverlay.getBoundingClientRect();
-      var currentX = e.clientX - rect.left;
-      var currentY = e.clientY - rect.top;
-
-      var x = Math.min(drawState.startX, currentX);
-      var y = Math.min(drawState.startY, currentY);
-      var w = Math.abs(currentX - drawState.startX);
-      var h = Math.abs(currentY - drawState.startY);
-
-      drawPreview.style.left = x + 'px';
-      drawPreview.style.top = y + 'px';
-      drawPreview.style.width = w + 'px';
-      drawPreview.style.height = h + 'px';
-    }
-
-    async function onDrawEnd(e) {
-      if (!drawState.isDrawing || !interactionOverlay) return;
-      drawState.isDrawing = false;
-
-      if (drawPreview) {
-        var x = parseFloat(drawPreview.style.left);
-        var y = parseFloat(drawPreview.style.top);
-        var w = parseFloat(drawPreview.style.width);
-        var h = parseFloat(drawPreview.style.height);
-
-        if (w > 10 && h > 10) {
-          // Get overlay dimensions
-          var overlayRect = interactionOverlay.getBoundingClientRect();
-
-          // Store as simple percentages (0-1) relative to overlay
-          // The actual PDF coordinate conversion will happen in generateRedactedPdfBytes
-          // using PDFLib's page dimensions which are the authoritative source
-          addManualRedaction({
-            type: 'rect',
-            label: 'Área dibujada',
-            value: 'Rectángulo (' + Math.round(w) + 'x' + Math.round(h) + ' px)',
-            coords: {
-              page: 1,
-              // Store raw percentage positions (0-1 range)
-              xRatio: x / overlayRect.width,
-              yRatio: y / overlayRect.height,
-              wRatio: w / overlayRect.width,
-              hRatio: h / overlayRect.height
-            }
-          });
-        }
-
-        drawPreview.style.display = 'none';
-      }
-    }
-
-    // ---- MANUAL REDACTIONS MANAGEMENT ----
-    function addManualRedaction(item) {
-      // Check for duplicates
-      var isDuplicate = manualRedactions.some(function (r) {
-        if (r.type !== item.type) return false;
-        if (r.type === 'text') return r.value === item.value;
-        if (r.type === 'rect') {
-          var c1 = r.coords, c2 = item.coords;
-          return c1 && c2 && c1.x === c2.x && c1.y === c2.y && c1.width === c2.width && c1.height === c2.height;
-        }
-        return false;
-      });
-
-      if (isDuplicate) return;
-
-      manualRedactions.push(item);
-      renderManualRedactions();
-      updateObfuscateButtonState();
-    }
-
-    function removeManualRedaction(index) {
-      manualRedactions.splice(index, 1);
-      renderManualRedactions();
-      updateObfuscateButtonState();
-    }
-
-    function clearAllManualRedactions() {
-      manualRedactions = [];
-      renderManualRedactions();
-      updateObfuscateButtonState();
-    }
-
-    function renderManualRedactions() {
-      if (!manualRedactionsList || !manualRedactionsPanel) return;
-
-      if (!manualRedactions.length) {
-        manualRedactionsPanel.style.display = 'none';
-        return;
       }
 
-      manualRedactionsPanel.style.display = 'block';
-
-      var html = '';
-      manualRedactions.forEach(function (r, i) {
-        html += '<li>';
-        html += '<span class="redact-text" title="' + escapeHtml(r.value) + '">';
-        html += '<strong>' + escapeHtml(r.label) + ':</strong> ' + escapeHtml(r.value);
-        html += '</span>';
-        html += '<button type="button" class="redact-remove" data-idx="' + i + '">✕</button>';
-        html += '</li>';
-      });
-      manualRedactionsList.innerHTML = html;
-
-      // Add remove handlers
-      manualRedactionsList.querySelectorAll('.redact-remove').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var idx = parseInt(btn.getAttribute('data-idx'));
-          removeManualRedaction(idx);
-        });
-      });
+      drawPreview.style.display = 'none';
     }
+  }
 
-    if (clearManualBtn) {
-      clearManualBtn.addEventListener('click', function () {
-        if (confirm('¿Limpiar todas las redacciones manuales?')) {
-          clearAllManualRedactions();
-        }
-      });
-    }
-
-    function updateObfuscateButtonState() {
-      var hasAiFindings = latestFindings && latestFindings.length > 0;
-      var hasManual = manualRedactions.length > 0;
-      if (obfuscateButton) {
-        obfuscateButton.disabled = !hasAiFindings && !hasManual;
+  // ---- MANUAL REDACTIONS MANAGEMENT ----
+  function addManualRedaction(item) {
+    // Check for duplicates
+    var isDuplicate = manualRedactions.some(function (r) {
+      if (r.type !== item.type) return false;
+      if (r.type === 'text') return r.value === item.value;
+      if (r.type === 'rect') {
+        var c1 = r.coords, c2 = item.coords;
+        return c1 && c2 && c1.x === c2.x && c1.y === c2.y && c1.width === c2.width && c1.height === c2.height;
       }
+      return false;
+    });
+
+    if (isDuplicate) return;
+
+    manualRedactions.push(item);
+    renderManualRedactions();
+    updateObfuscateButtonState();
+  }
+
+  function removeManualRedaction(index) {
+    manualRedactions.splice(index, 1);
+    renderManualRedactions();
+    updateObfuscateButtonState();
+  }
+
+  function clearAllManualRedactions() {
+    manualRedactions = [];
+    renderManualRedactions();
+    updateObfuscateButtonState();
+  }
+
+  function renderManualRedactions() {
+    if (!manualRedactionsList || !manualRedactionsPanel) return;
+
+    if (!manualRedactions.length) {
+      manualRedactionsPanel.style.display = 'none';
+      return;
     }
 
-    // ---- INTEGRATE WITH EXISTING REDACTION SYSTEM ----
-    // Override getSelectedValues to include manual redactions
-    var originalGetSelectedValues = typeof getSelectedValues === 'function' ? getSelectedValues : null;
+    manualRedactionsPanel.style.display = 'block';
 
-    window.getManualRedactionValues = function () {
-      return manualRedactions
-        .filter(function (r) { return r.type === 'text'; })
-        .map(function (r) { return r.value; });
-    };
+    var html = '';
+    manualRedactions.forEach(function (r, i) {
+      html += '<li>';
+      html += '<span class="redact-text" title="' + escapeHtml(r.value) + '">';
+      html += '<strong>' + escapeHtml(r.label) + ':</strong> ' + escapeHtml(r.value);
+      html += '</span>';
+      html += '<button type="button" class="redact-remove" data-idx="' + i + '">✕</button>';
+      html += '</li>';
+    });
+    manualRedactionsList.innerHTML = html;
 
-    window.getManualRectRedactions = function () {
-      return manualRedactions.filter(function (r) { return r.type === 'rect'; });
-    };
+    // Add remove handlers
+    manualRedactionsList.querySelectorAll('.redact-remove').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = parseInt(btn.getAttribute('data-idx'));
+        removeManualRedaction(idx);
+      });
+    });
+  }
 
-    // Patch shouldRedactItem to include manual text redactions
-    var originalShouldRedactItem = typeof shouldRedactItem === 'function' ? shouldRedactItem : null;
+  if (clearManualBtn) {
+    clearManualBtn.addEventListener('click', function () {
+      if (confirm('¿Limpiar todas las redacciones manuales?')) {
+        clearAllManualRedactions();
+      }
+    });
+  }
 
-    function escapeHtml(text) {
-      if (!text) return "";
-      return text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+  function updateObfuscateButtonState() {
+    var hasAiFindings = latestFindings && latestFindings.length > 0;
+    var hasManual = manualRedactions.length > 0;
+    if (obfuscateButton) {
+      obfuscateButton.disabled = !hasAiFindings && !hasManual;
     }
+  }
 
-    // Initialize icons
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
-  })();
+  // ---- INTEGRATE WITH EXISTING REDACTION SYSTEM ----
+  // Override getSelectedValues to include manual redactions
+  var originalGetSelectedValues = typeof getSelectedValues === 'function' ? getSelectedValues : null;
+
+  window.getManualRedactionValues = function () {
+    return manualRedactions
+      .filter(function (r) { return r.type === 'text'; })
+      .map(function (r) { return r.value; });
+  };
+
+  window.getManualRectRedactions = function () {
+    return manualRedactions.filter(function (r) { return r.type === 'rect'; });
+  };
+
+  // Patch shouldRedactItem to include manual text redactions
+  var originalShouldRedactItem = typeof shouldRedactItem === 'function' ? shouldRedactItem : null;
+
+  function escapeHtml(text) {
+    if (!text) return "";
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  // Initialize icons
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+  }) ();
 </script>
 
 {% endblock %}
