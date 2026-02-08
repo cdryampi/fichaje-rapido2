@@ -97,6 +97,26 @@
             style="margin-top: 8px; font-family: monospace; font-size: 11px; white-space: pre-wrap; color: #cbd5e1; max-height: 300px; overflow-y: auto;">
           </div>
         </details>
+
+        <!-- AI Chat Section -->
+        <div class="ai-chat-section" data-chat-section
+          style="display: none; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
+          <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #e2e8f0;">
+            <span style="margin-right: 6px;">💬</span> Preguntar a la IA
+          </h4>
+          <div class="chat-messages" data-chat-messages
+            style="max-height: 200px; overflow-y: auto; margin-bottom: 12px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+            <p style="color: #94a3b8; font-size: 12px; margin: 0;">Pregunta a la IA sobre sus decisiones de detección...
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" data-chat-input placeholder="¿Por qué no detectaste...?"
+              style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px;" />
+            <button type="button" data-chat-send class="btn btn--secondary" style="padding: 8px 16px;">
+              Enviar
+            </button>
+          </div>
+        </div>
       </div>
       <p class="muted small">El PDF no se guarda en el servidor; se muestra solo para ti.</p>
     </section>
@@ -1211,14 +1231,30 @@
         showSelectAllControls(false);
         showDebugInfo(null);
         obfuscateButton.disabled = true;
+
+        // Hide chat
+        if (chatSection) chatSection.style.display = 'none';
         return Promise.resolve();
       }
+
+      // Update chat context
+      currentDocText = fullText;
 
       detectionSummary.textContent = "Analizando documento con IA...";
       detectionList.innerHTML = '<li class="detection-empty">Esperando respuesta de IA...</li>';
 
       return callAiValidation(fullText)
         .then(function (aiData) {
+          // Update chat context with results
+          currentDetectionResults = aiData.sensitive || [];
+          chatHistory = []; // Reset history for new document
+
+          // Show chat section and reset UI
+          if (chatSection) {
+            chatSection.style.display = 'block';
+            chatMessages.innerHTML = '<p style="color: #94a3b8; font-size: 12px; margin: 0; padding: 8px;">Pregunta a la IA sobre sus decisiones de detección...</p>';
+          }
+
           if (aiData && aiData.debug) {
             showDebugInfo(aiData.debug);
           }
@@ -1255,6 +1291,9 @@
           clearSelections();
           showSelectAllControls(false);
           obfuscateButton.disabled = true;
+
+          // Hide chat on error
+          if (chatSection) chatSection.style.display = 'none';
         });
     }
 
@@ -1300,6 +1339,126 @@
           return data;
         });
       });
+    }
+
+    // --- CHAT LOGIC ---
+    var currentDocText = "";
+    var currentDetectionResults = [];
+    var chatHistory = [];
+    var chatSection = document.querySelector('[data-chat-section]');
+    var chatMessages = document.querySelector('[data-chat-messages]');
+    var chatInput = document.querySelector('[data-chat-input]');
+    var chatSendBtn = document.querySelector('[data-chat-send]');
+
+    function initChat() {
+      if (chatSendBtn) {
+        // Remove existing listener to avoid duplicates if re-initialized
+        chatSendBtn.removeEventListener("click", sendChatMessage);
+        chatSendBtn.addEventListener("click", sendChatMessage);
+      }
+      if (chatInput) {
+        chatInput.removeEventListener("keydown", chatInputKeyHandler);
+        chatInput.addEventListener("keydown", chatInputKeyHandler);
+      }
+    }
+
+    function chatInputKeyHandler(e) {
+      if (e.key === "Enter") sendChatMessage();
+    }
+
+    // Initialize chat listeners
+    initChat();
+
+    function sendChatMessage() {
+      var message = chatInput.value.trim();
+      if (!message) return;
+
+      // Add user message to UI
+      appendChatMessage("user", message);
+      chatInput.value = "";
+      chatInput.disabled = true;
+      chatSendBtn.disabled = true;
+
+      // Add loading message
+      var loadingId = "loading-" + Date.now();
+      var loadingDiv = document.createElement("div");
+      loadingDiv.id = loadingId;
+      loadingDiv.style.marginBottom = "8px";
+      loadingDiv.style.color = "#94a3b8";
+      loadingDiv.style.fontSize = "12px";
+      loadingDiv.textContent = "AI escribiendo...";
+      chatMessages.appendChild(loadingDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      var headers = { "Content-Type": "application/json" };
+      var token = getCsrfToken();
+      if (token) headers["X-CSRFToken"] = token;
+
+      fetch("/api/pdf/chat", {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({
+          message: message,
+          document_text: currentDocText,
+          detection_results: currentDetectionResults,
+          chat_history: chatHistory
+        })
+      })
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+          var loadingEl = document.getElementById(loadingId);
+          if (loadingEl) loadingEl.remove();
+
+          if (data.ok) {
+            appendChatMessage("assistant", data.response);
+            // Update history
+            chatHistory.push({ role: "user", content: message });
+            chatHistory.push({ role: "assistant", content: data.response });
+          } else {
+            appendChatMessage("system", "Error: " + (data.error || "Error desconocido"));
+          }
+        })
+        .catch(function (err) {
+          var loadingEl = document.getElementById(loadingId);
+          if (loadingEl) loadingEl.remove();
+          appendChatMessage("system", "Error de red: " + err.message);
+        })
+        .finally(function () {
+          chatInput.disabled = false;
+          chatSendBtn.disabled = false;
+          chatInput.focus();
+        });
+    }
+
+    function appendChatMessage(role, text) {
+      var div = document.createElement("div");
+      div.style.marginBottom = "10px";
+      div.style.padding = "8px";
+      div.style.borderRadius = "6px";
+      div.style.fontSize = "13px";
+      div.style.lineHeight = "1.4";
+
+      if (role === "user") {
+        div.style.background = "rgba(59, 130, 246, 0.2)"; // Blue tint
+        div.style.marginLeft = "20px";
+        div.style.border = "1px solid rgba(59, 130, 246, 0.3)";
+        div.innerHTML = "<strong>Tú:</strong> " + escapeHtml(text).replace(/\n/g, "<br>");
+      } else if (role === "assistant") {
+        div.style.background = "rgba(16, 185, 129, 0.1)"; // Green tint
+        div.style.marginRight = "20px";
+        div.style.border = "1px solid rgba(16, 185, 129, 0.2)";
+        // Simple markdown formatting for bold
+        var formatted = escapeHtml(text)
+          .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+          .replace(/\n/g, "<br>");
+        div.innerHTML = "<strong>IA:</strong> " + formatted;
+      } else {
+        div.style.color = "#ef4444";
+        div.textContent = text;
+      }
+
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
     function collectCandidateGroups(text) {

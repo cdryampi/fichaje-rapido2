@@ -1610,6 +1610,84 @@ def api_pdf_analyze():
     return jsonify({"ok": True, **result})
 
 
+@app.route("/api/pdf/chat", methods=["POST"])
+@login_required
+def api_pdf_chat():
+    """Chat endpoint to ask AI about its detection decisions."""
+    payload = request.get_json(silent=True) or {}
+    message = (payload.get("message") or "").strip()
+    document_text = (payload.get("document_text") or "").strip()
+    detection_results = payload.get("detection_results") or []
+    chat_history = payload.get("chat_history") or []
+    
+    if not message:
+        return jsonify({"ok": False, "error": "El mensaje es obligatorio."}), 400
+    
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return jsonify({"ok": False, "error": "OPENAI_API_KEY no configurada."}), 500
+    
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        model = os.environ.get("PDF_AI_MODEL", "gpt-4o-mini")
+        
+        # Build context from detection results
+        results_summary = ""
+        if detection_results:
+            results_summary = "Datos sensibles detectados:\n"
+            for item in detection_results[:20]:  # Limit to 20
+                results_summary += f"- {item.get('label', 'Dato')}: {item.get('value', '')} ({item.get('reason', '')})\n"
+        
+        # Truncate document for context
+        doc_excerpt = document_text[:3000] if len(document_text) > 3000 else document_text
+        
+        system_prompt = f"""Eres un asistente DPO (Oficial de Protección de Datos) que ha analizado un documento PDF.
+Tu tarea anterior fue detectar datos personales sensibles en el documento.
+
+CONTEXTO DEL DOCUMENTO (extracto):
+{doc_excerpt}
+
+{results_summary}
+
+Responde las preguntas del usuario sobre:
+- Por qué detectaste o no detectaste ciertos datos
+- Aclaraciones sobre tu clasificación
+- Sugerencias para mejorar la detección
+
+Sé conciso y útil. Si el usuario pregunta por un dato específico que no detectaste, explica por qué."""
+
+        # Build messages with history
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add chat history (limit to last 6 exchanges)
+        for entry in chat_history[-6:]:
+            if entry.get("role") in ["user", "assistant"]:
+                messages.append({"role": entry["role"], "content": entry["content"]})
+        
+        # Add current message
+        messages.append({"role": "user", "content": message})
+        
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=500
+        )
+        
+        ai_response = response.choices[0].message.content
+        
+        return jsonify({
+            "ok": True,
+            "response": ai_response,
+            "model": model
+        })
+        
+    except Exception as exc:
+        app.logger.error(f"Chat error: {exc}")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
 @app.route("/requests")
 @login_required
 def requests_page():
