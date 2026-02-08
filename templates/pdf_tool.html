@@ -906,10 +906,16 @@
     });
 
     // Upload button trigger
+    // Upload button trigger
     if (headerUploadBtn && fileInput) {
-      headerUploadBtn.addEventListener("click", function () {
+      console.log("Attaching upload button listener");
+      headerUploadBtn.addEventListener("click", function (e) {
+        e.preventDefault(); // Prevent any default button behavior
+        console.log("Upload button clicked");
         fileInput.click();
       });
+    } else {
+      console.error("Upload button or file input not found", { btn: headerUploadBtn, input: fileInput });
     }
 
     // Auto Detect Trigger
