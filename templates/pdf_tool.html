@@ -1263,7 +1263,7 @@
 
       detectionSummary.textContent = "Generando previsualización censurada...";
 
-      generateRedactedPdfBytes(currentPdfBytes, latestFindings, selectedValues)
+      generatePreviewPdfBytes(currentPdfBytes, latestFindings, selectedValues)
         .then(function (redactedBytes) {
           if (!redactedBytes) return; // Error handled inside
 
@@ -1550,6 +1550,102 @@
       } catch (e) {
         console.error(e);
         alert("Error generando PDF censurado: " + e.message);
+        return null;
+      }
+    }
+
+    // Helper function to get preview color based on label
+    function getPreviewColor(label) {
+      if (!label) return { r: 0.65, g: 0.55, b: 0.98 }; // Lilac
+      var l = label.toLowerCase();
+      // Names - Blue
+      if (l.includes('nombre') || l.includes('name') || l.includes('apellido')) return { r: 0.23, g: 0.51, b: 0.96 };
+      // IDs - Green
+      if (l.includes('dni') || l.includes('nie') || l.includes('pasaporte') || l.includes('passport') || l.includes('nif') || l.includes('cif') || l.includes('identificador') || l.includes('id')) return { r: 0.06, g: 0.73, b: 0.51 };
+      // Dates - Yellow
+      if (l.includes('fecha') || l.includes('date') || l.includes('nacimiento') || l.includes('birth')) return { r: 0.98, g: 0.75, b: 0.14 };
+      // Addresses - Orange
+      if (l.includes('direccion') || l.includes('address') || l.includes('domicilio') || l.includes('calle') || l.includes('ciudad') || l.includes('provincia') || l.includes('postal')) return { r: 0.98, g: 0.45, b: 0.09 };
+      // Default - Lilac
+      return { r: 0.65, g: 0.55, b: 0.98 };
+    }
+
+    // Find label for a text value from selection state
+    function findLabelForValue(value) {
+      var keys = Object.keys(selectionState);
+      for (var i = 0; i < keys.length; i++) {
+        var entry = selectionState[keys[i]];
+        if (entry && entry.selected && entry.value === value) {
+          return entry.label || '';
+        }
+      }
+      return '';
+    }
+
+    async function generatePreviewPdfBytes(pdfBytes, findings, redactionTerms) {
+      if (!window.PDFLib) {
+        alert("La librería PDF-Lib no se ha cargado correctamente.");
+        return null;
+      }
+
+      try {
+        var pdfCopy = new Uint8Array(pdfBytes);
+        var pdfDoc = await PDFLib.PDFDocument.load(pdfCopy, { ignoreEncryption: true });
+        var pages = pdfDoc.getPages();
+
+        if (!currentPdfDoc) {
+          alert("Error interno: documento PDF.js no disponible.");
+          return null;
+        }
+
+        for (var pgIdx = 0; pgIdx < pages.length; pgIdx++) {
+          var page = pages[pgIdx];
+          var pdfJsPage = await currentPdfDoc.getPage(pgIdx + 1);
+          var textContent = await pdfJsPage.getTextContent();
+
+          for (var item of textContent.items) {
+            var text = item.str;
+            if (!text) continue;
+
+            var shouldMark = shouldRedactItem(text, redactionTerms);
+            if (shouldMark) {
+              var tx = item.transform[4];
+              var ty = item.transform[5];
+              var itemWidth = item.width || 0;
+              var fontSize = Math.sqrt(item.transform[0] * item.transform[0] + item.transform[1] * item.transform[1]);
+
+              // Find the label for this text to determine color
+              var label = findLabelForValue(text);
+              var color = getPreviewColor(label);
+
+              // Draw colored underline (line at the bottom of the text)
+              page.drawLine({
+                start: { x: tx, y: ty },
+                end: { x: tx + itemWidth, y: ty },
+                thickness: 3,
+                color: PDFLib.rgb(color.r, color.g, color.b),
+                opacity: 0.9,
+              });
+
+              // Draw light background highlight
+              page.drawRectangle({
+                x: tx,
+                y: ty,
+                width: itemWidth,
+                height: fontSize,
+                color: PDFLib.rgb(color.r, color.g, color.b),
+                opacity: 0.2,
+              });
+            }
+          }
+        }
+
+        var pdfBytesModified = await pdfDoc.save();
+        return pdfBytesModified;
+
+      } catch (e) {
+        console.error(e);
+        alert("Error generando preview: " + e.message);
         return null;
       }
     }
