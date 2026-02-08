@@ -84,6 +84,20 @@
       </div>
       <ul class="detection-list" data-detection-list></ul>
 
+      <!-- Preview Mode Selector -->
+      <div class="preview-mode-container"
+        style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <label style="font-size: 12px; color: #94a3b8; display: flex; align-items: center; gap: 8px;">
+          <span>Vista previa:</span>
+          <select id="preview-mode-select"
+            style="padding: 6px 10px; border-radius: 6px; background: #1e293b; color: #e2e8f0; border: 1px solid #334155; font-size: 12px; cursor: pointer;">
+            <option value="original">Original</option>
+            <option value="draft">Draft (colores)</option>
+            <option value="redacted">Redacted (negro)</option>
+          </select>
+        </label>
+      </div>
+
       <!-- Debug Section -->
       <details class="debug-details" data-debug-container
         style="display: none; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">
@@ -1222,48 +1236,47 @@
     // Se usa para almacenar el blob de previsualización (censurado)
     var currentRedactedBlobUrl = null;
 
-    // Preview Mode Toggle Logic
-    var previewToggle = document.getElementById("preview-mode-toggle");
-    var previewStatus = document.getElementById("preview-status");
+    // Preview Mode Dropdown Logic
+    var previewModeSelect = document.getElementById("preview-mode-select");
 
-    if (previewToggle) {
-      previewToggle.addEventListener("change", function () {
-        var isRedacted = previewToggle.checked;
-        if (previewStatus) previewStatus.textContent = isRedacted ? "Redacted" : "Original";
+    if (previewModeSelect) {
+      previewModeSelect.addEventListener("change", function () {
+        var mode = previewModeSelect.value;
 
-        if (!isRedacted) {
+        if (mode === "original") {
           // Restore original view
           if (currentPdfBytes && nativeViewer) {
             var blob = new Blob([currentPdfBytes], { type: 'application/pdf' });
             var url = URL.createObjectURL(blob);
             nativeViewer.data = url;
           }
-        } else {
-          // Generate and show redacted view
-          updateRedactedPreview();
+        } else if (mode === "draft") {
+          // Generate and show draft view with colored highlights
+          updatePreview("draft");
+        } else if (mode === "redacted") {
+          // Generate and show redacted view with black rectangles
+          updatePreview("redacted");
         }
       });
     }
 
-    function updateRedactedPreview() {
-      var hasAiFindings = latestFindings && latestFindings.length;
-      var hasManualRedactions = typeof manualRedactions !== 'undefined' && manualRedactions.length > 0;
-
+    function updatePreview(mode) {
       var selectedValues = getSelectedValues();
 
       // GENERAR PREVIEW
       if (!currentPdfBytes) {
         alert("No hay PDF cargado.");
-        if (previewToggle) {
-          previewToggle.checked = false;
-          if (previewStatus) previewStatus.textContent = "Original";
+        if (previewModeSelect) {
+          previewModeSelect.value = "original";
         }
         return;
       }
 
-      detectionSummary.textContent = "Generando previsualización censurada...";
+      detectionSummary.textContent = "Generando previsualización...";
 
-      generatePreviewPdfBytes(currentPdfBytes, latestFindings, selectedValues)
+      var generateFn = mode === "draft" ? generatePreviewPdfBytes : generateRedactedPdfBytes;
+
+      generateFn(currentPdfBytes, latestFindings, selectedValues)
         .then(function (redactedBytes) {
           if (!redactedBytes) return; // Error handled inside
 
