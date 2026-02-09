@@ -1,32 +1,152 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card">
-  <h2>Horarios (cuadrante semanal)</h2>
-  <p class="muted">Demostración: cuadrante lunes a domingo en blanco.</p>
-  <table style="width:100%; border-collapse: collapse;">
-    <thead>
-      <tr>
-        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Lunes</th>
-        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Martes</th>
-        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Miércoles</th>
-        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Jueves</th>
-        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Viernes</th>
-        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Sábado</th>
-        <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">Domingo</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td style="padding:16px; height:120px; border-bottom:1px solid #f0f0f0;">&nbsp;</td>
-        <td style="padding:16px; border-bottom:1px solid #f0f0f0;">&nbsp;</td>
-        <td style="padding:16px; border-bottom:1px solid #f0f0f0;">&nbsp;</td>
-        <td style="padding:16px; border-bottom:1px solid #f0f0f0;">&nbsp;</td>
-        <td style="padding:16px; border-bottom:1px solid #f0f0f0;">&nbsp;</td>
-        <td style="padding:16px; border-bottom:1px solid #f0f0f0;">&nbsp;</td>
-        <td style="padding:16px; border-bottom:1px solid #f0f0f0;">&nbsp;</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-{% endblock %}
+  <h2>Horario</h2>
+  <p class="muted">Organiza el cuadrante de lunes a viernes y asigna personas con un color.</p>
 
+  <div style="overflow-x:auto;">
+    <table style="width:100%; border-collapse: collapse; min-width: 720px;">
+      <thead>
+        <tr>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:10px;">Lunes</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:10px;">Martes</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:10px;">Miércoles</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:10px;">Jueves</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:10px;">Viernes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          {% for day in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'] %}
+          <td style="padding:12px; border-bottom:1px solid #f0f0f0; vertical-align:top;">
+            <div style="display:flex; flex-direction:column; gap:8px;" data-schedule-cell>
+              <label class="muted" style="font-size:12px;">Asignación {{ day }}</label>
+              <select data-person-select>
+                <option value="">Selecciona persona</option>
+              </select>
+              <div class="inline">
+                <input type="color" value="#8ecae6" aria-label="Color {{ day }}" data-color-input>
+                <span class="muted" style="font-size:12px;">Color</span>
+              </div>
+              <div data-schedule-badge
+                style="padding:8px 10px; border-radius:8px; border:1px dashed #ccc; font-weight:600; color:#666;">
+                Sin asignar
+              </div>
+            </div>
+          </td>
+          {% endfor %}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="header">
+    <h3>Personas</h3>
+    <div class="muted">Total: <strong data-people-count>0</strong></div>
+  </div>
+  <p class="muted">Añade personas para que aparezcan en el selector del horario.</p>
+  <form id="people-form">
+    <input type="text" name="name" placeholder="Nombre" required>
+    <input type="text" name="shift" placeholder="Horario que hace (ej. 08:00-16:00)" required>
+    <textarea name="comments" rows="3" placeholder="Comentarios"></textarea>
+    <button type="submit" class="btn btn-green">Añadir persona</button>
+  </form>
+
+  <div style="margin-top:16px;">
+    <div class="section-title">Listado</div>
+    <div data-people-list style="display:flex; flex-direction:column; gap:8px;"></div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var people = [];
+    var form = document.getElementById('people-form');
+    var list = document.querySelector('[data-people-list]');
+    var count = document.querySelector('[data-people-count]');
+    var selects = document.querySelectorAll('[data-person-select]');
+
+    function renderPeople() {
+      list.innerHTML = '';
+      count.textContent = people.length.toString();
+      people.forEach(function (person) {
+        var item = document.createElement('div');
+        item.style.border = '1px solid #eee';
+        item.style.borderRadius = '10px';
+        item.style.padding = '10px 12px';
+        item.innerHTML =
+          '<strong>' + person.name + '</strong>' +
+          '<div class="muted">Horario: ' + person.shift + '</div>' +
+          (person.comments ? '<div class="muted">Comentarios: ' + person.comments + '</div>' : '');
+        list.appendChild(item);
+      });
+      updateSelectOptions();
+    }
+
+    function updateSelectOptions() {
+      selects.forEach(function (select) {
+        var current = select.value;
+        select.innerHTML = '<option value="">Selecciona persona</option>';
+        people.forEach(function (person) {
+          var opt = document.createElement('option');
+          opt.value = person.name;
+          opt.textContent = person.name;
+          select.appendChild(opt);
+        });
+        if (current) {
+          select.value = current;
+        }
+        updateBadge(select.closest('[data-schedule-cell]'));
+      });
+    }
+
+    function updateBadge(cell) {
+      if (!cell) { return; }
+      var select = cell.querySelector('[data-person-select]');
+      var color = cell.querySelector('[data-color-input]');
+      var badge = cell.querySelector('[data-schedule-badge]');
+      if (!select || !color || !badge) { return; }
+      if (!select.value) {
+        badge.textContent = 'Sin asignar';
+        badge.style.background = 'transparent';
+        badge.style.color = '#666';
+        badge.style.border = '1px dashed #ccc';
+      } else {
+        badge.textContent = select.value;
+        badge.style.background = color.value;
+        badge.style.color = '#111';
+        badge.style.border = '1px solid transparent';
+      }
+    }
+
+    if (form) {
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var formData = new FormData(form);
+        var name = (formData.get('name') || '').toString().trim();
+        var shift = (formData.get('shift') || '').toString().trim();
+        var comments = (formData.get('comments') || '').toString().trim();
+        if (!name || !shift) { return; }
+        people.push({ name: name, shift: shift, comments: comments });
+        form.reset();
+        renderPeople();
+      });
+    }
+
+    document.querySelectorAll('[data-schedule-cell]').forEach(function (cell) {
+      var select = cell.querySelector('[data-person-select]');
+      var color = cell.querySelector('[data-color-input]');
+      if (select) {
+        select.addEventListener('change', function () { updateBadge(cell); });
+      }
+      if (color) {
+        color.addEventListener('input', function () { updateBadge(cell); });
+      }
+    });
+
+    renderPeople();
+  })();
+</script>
+{% endblock %}
