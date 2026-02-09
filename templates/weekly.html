@@ -169,6 +169,27 @@
     gap: 4px;
     min-height: 34px;
   }
+  .slot.shift-slot {
+    min-height: 26px;
+  }
+  .shift-split {
+    display: grid;
+    gap: 6px;
+  }
+  .shift-block {
+    border-top: 1px solid #e6e6e6;
+    padding-top: 4px;
+  }
+  .shift-block:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+  .shift-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #6b6b6b;
+  }
   .slot.drag-over {
     background: #eef6ff;
     outline: 2px dashed #7bb6ff;
@@ -343,6 +364,9 @@
       assignment.week = slot.dataset.week;
       assignment.day = slot.dataset.day;
       assignment.sector = slot.dataset.sector;
+      if (slot.dataset.shift) {
+        assignment.shift = slot.dataset.shift;
+      }
       renderAll();
     }
 
@@ -386,60 +410,136 @@
 
         days.forEach(function (day) {
           var cell = document.createElement('td');
-          var slot = document.createElement('div');
-          slot.className = 'slot';
-          slot.dataset.week = weekKey;
-          slot.dataset.day = day;
-          slot.dataset.sector = sector.key;
-          slot.addEventListener('dragover', function (event) {
-            event.preventDefault();
-            event.currentTarget.classList.add('drag-over');
-          });
-          slot.addEventListener('dragleave', function (event) {
-            event.currentTarget.classList.remove('drag-over');
-          });
-          slot.addEventListener('drop', function (event) {
-            event.currentTarget.classList.remove('drag-over');
-            handleDrop(event);
-          });
-          var matches = assignments.filter(function (assignment) {
-            return assignment.week === weekKey &&
-              assignment.day === day &&
-              assignment.sector === sector.key;
-          });
-          matches.forEach(function (assignment) {
-            var pill = document.createElement('div');
-            var meta = assignment.shift;
-            if (assignment.schedule) {
-              meta += ' · ' + assignment.schedule;
-            }
-            pill.className = 'assignment';
-            pill.style.background = assignment.color;
-            pill.setAttribute('draggable', 'true');
-            pill.addEventListener('dragstart', function (event) {
-              handleDragStart(event, assignment);
+          var isSplit = sector.key === 'Presencial' || sector.key === 'Teléfono';
+          var shiftGroups = isSplit ? ['Mañana', 'Tarde'] : [null];
+
+          if (isSplit) {
+            var splitWrap = document.createElement('div');
+            splitWrap.className = 'shift-split';
+            shiftGroups.forEach(function (shiftKey) {
+              var block = document.createElement('div');
+              block.className = 'shift-block';
+              var label = document.createElement('div');
+              label.className = 'shift-label';
+              label.textContent = shiftKey;
+              block.appendChild(label);
+
+              var slot = document.createElement('div');
+              slot.className = 'slot shift-slot';
+              slot.dataset.week = weekKey;
+              slot.dataset.day = day;
+              slot.dataset.sector = sector.key;
+              slot.dataset.shift = shiftKey;
+              slot.addEventListener('dragover', function (event) {
+                event.preventDefault();
+                event.currentTarget.classList.add('drag-over');
+              });
+              slot.addEventListener('dragleave', function (event) {
+                event.currentTarget.classList.remove('drag-over');
+              });
+              slot.addEventListener('drop', function (event) {
+                event.currentTarget.classList.remove('drag-over');
+                handleDrop(event);
+              });
+              var matches = assignments.filter(function (assignment) {
+                var matchesShift = assignment.shift === shiftKey || assignment.shift === 'Completo';
+                return assignment.week === weekKey &&
+                  assignment.day === day &&
+                  assignment.sector === sector.key &&
+                  matchesShift;
+              });
+              matches.forEach(function (assignment) {
+                var pill = document.createElement('div');
+                var meta = assignment.shift;
+                if (assignment.schedule) {
+                  meta += ' · ' + assignment.schedule;
+                }
+                pill.className = 'assignment';
+                pill.style.background = assignment.color;
+                pill.setAttribute('draggable', 'true');
+                pill.addEventListener('dragstart', function (event) {
+                  handleDragStart(event, assignment);
+                });
+                pill.innerHTML =
+                  '<div class="assignment__info">' +
+                    '<div>' + assignment.person + '</div>' +
+                    '<span>' + meta + '</span>' +
+                  '</div>' +
+                  '<div class="assignment__actions">' +
+                    '<button type="button" class="icon-button" data-action="edit" aria-label="Editar">✎</button>' +
+                    '<button type="button" class="icon-button" data-action="delete" aria-label="Eliminar">🗑</button>' +
+                  '</div>';
+                pill.querySelector('[data-action="edit"]').addEventListener('click', function (event) {
+                  event.stopPropagation();
+                  openEditor(assignment);
+                });
+                pill.querySelector('[data-action="delete"]').addEventListener('click', function (event) {
+                  event.stopPropagation();
+                  assignments = assignments.filter(function (item) { return item.id !== assignment.id; });
+                  renderAll();
+                });
+                slot.appendChild(pill);
+              });
+              block.appendChild(slot);
+              splitWrap.appendChild(block);
             });
-            pill.innerHTML =
-              '<div class="assignment__info">' +
-                '<div>' + assignment.person + '</div>' +
-                '<span>' + meta + '</span>' +
-              '</div>' +
-              '<div class="assignment__actions">' +
-                '<button type="button" class="icon-button" data-action="edit" aria-label="Editar">✎</button>' +
-                '<button type="button" class="icon-button" data-action="delete" aria-label="Eliminar">🗑</button>' +
-              '</div>';
-            pill.querySelector('[data-action="edit"]').addEventListener('click', function (event) {
-              event.stopPropagation();
-              openEditor(assignment);
+            cell.appendChild(splitWrap);
+          } else {
+            var slot = document.createElement('div');
+            slot.className = 'slot';
+            slot.dataset.week = weekKey;
+            slot.dataset.day = day;
+            slot.dataset.sector = sector.key;
+            slot.addEventListener('dragover', function (event) {
+              event.preventDefault();
+              event.currentTarget.classList.add('drag-over');
             });
-            pill.querySelector('[data-action="delete"]').addEventListener('click', function (event) {
-              event.stopPropagation();
-              assignments = assignments.filter(function (item) { return item.id !== assignment.id; });
-              renderAll();
+            slot.addEventListener('dragleave', function (event) {
+              event.currentTarget.classList.remove('drag-over');
             });
-            slot.appendChild(pill);
-          });
-          cell.appendChild(slot);
+            slot.addEventListener('drop', function (event) {
+              event.currentTarget.classList.remove('drag-over');
+              handleDrop(event);
+            });
+            var matches = assignments.filter(function (assignment) {
+              return assignment.week === weekKey &&
+                assignment.day === day &&
+                assignment.sector === sector.key;
+            });
+            matches.forEach(function (assignment) {
+              var pill = document.createElement('div');
+              var meta = assignment.shift;
+              if (assignment.schedule) {
+                meta += ' · ' + assignment.schedule;
+              }
+              pill.className = 'assignment';
+              pill.style.background = assignment.color;
+              pill.setAttribute('draggable', 'true');
+              pill.addEventListener('dragstart', function (event) {
+                handleDragStart(event, assignment);
+              });
+              pill.innerHTML =
+                '<div class="assignment__info">' +
+                  '<div>' + assignment.person + '</div>' +
+                  '<span>' + meta + '</span>' +
+                '</div>' +
+                '<div class="assignment__actions">' +
+                  '<button type="button" class="icon-button" data-action="edit" aria-label="Editar">✎</button>' +
+                  '<button type="button" class="icon-button" data-action="delete" aria-label="Eliminar">🗑</button>' +
+                '</div>';
+              pill.querySelector('[data-action="edit"]').addEventListener('click', function (event) {
+                event.stopPropagation();
+                openEditor(assignment);
+              });
+              pill.querySelector('[data-action="delete"]').addEventListener('click', function (event) {
+                event.stopPropagation();
+                assignments = assignments.filter(function (item) { return item.id !== assignment.id; });
+                renderAll();
+              });
+              slot.appendChild(pill);
+            });
+            cell.appendChild(slot);
+          }
           row.appendChild(cell);
         });
         tbody.appendChild(row);
