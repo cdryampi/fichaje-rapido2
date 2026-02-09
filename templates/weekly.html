@@ -3,15 +3,17 @@
 <div class="card">
   <div class="header">
     <div>
-      <h2>Horario de atención (empresa 9 personas)</h2>
+      <h2>Organizador de turnos (empresa 9 personas)</h2>
       <p class="muted">
-        Cuadrante visual tipo Excel con semanas A y B. Cobertura presencial de 08:15 a 14:00 y teléfono de 08:00 a 19:00.
+        Organizador semanal para asignar a cada persona su sector y franja sin entrar al detalle minuto a minuto.
+        Úsalo para enviar el cuadrante el jueves o viernes y que todos sepan dónde trabajar cada día.
       </p>
     </div>
     <div style="text-align:right;">
       <div class="muted" style="font-size:12px;">Cobertura requerida</div>
-      <div style="font-weight:600;">Presencial 08:15–14:00</div>
-      <div style="font-weight:600;">Teléfono 08:00–19:00</div>
+      <div style="font-weight:600;">Presencial (mañana): 4 personas</div>
+      <div style="font-weight:600;">Teléfono: 3 personas</div>
+      <div style="font-weight:600;">Back office: 2 personas</div>
     </div>
   </div>
 </div>
@@ -42,19 +44,25 @@
       <select name="person" id="person-select" required></select>
     </label>
     <label>
-      <span class="muted">Tipo</span>
-      <select name="type" required>
+      <span class="muted">Sector</span>
+      <select name="sector" required>
         <option value="Presencial">Presencial</option>
         <option value="Teléfono">Teléfono</option>
+        <option value="Back office">Back office</option>
       </select>
     </label>
     <label>
-      <span class="muted">Inicio</span>
-      <select name="start" id="start-time" required></select>
+      <span class="muted">Turno</span>
+      <select name="shift" required>
+        <option value="Mañana">Mañana</option>
+        <option value="Tarde">Tarde</option>
+        <option value="Noche">Noche</option>
+        <option value="Completo">Completo</option>
+      </select>
     </label>
     <label>
-      <span class="muted">Fin</span>
-      <select name="end" id="end-time" required></select>
+      <span class="muted">Horario (opcional)</span>
+      <input type="text" name="schedule" placeholder="08:00-14:00">
     </label>
     <label>
       <span class="muted">Color</span>
@@ -75,7 +83,7 @@
 <div class="card" style="margin-top:16px;">
   <div class="header">
     <h3>Semana B</h3>
-    <div class="muted">Rotación para equilibrar turnos</div>
+    <div class="muted">Rotación para equilibrar sectores</div>
   </div>
   <div class="excel-wrap" data-week-table="B"></div>
 </div>
@@ -111,9 +119,9 @@
     text-align: left;
     font-weight: 600;
   }
-  .time-cell {
+  .day-cell {
     background: #fafafa;
-    width: 90px;
+    width: 120px;
     font-weight: 600;
   }
   .slot {
@@ -154,6 +162,11 @@
 <script>
   (function () {
     var days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+    var sectors = [
+      { key: 'Presencial', label: 'Presencial' },
+      { key: 'Teléfono', label: 'Teléfono' },
+      { key: 'Back office', label: 'Back office' }
+    ];
     var people = [
       { name: 'Jaume', role: 'Responsable presencial' },
       { name: 'Mari', role: 'Teléfono principal' },
@@ -166,51 +179,34 @@
       { name: 'Ana Blasco', role: 'Refuerzo' }
     ];
     var assignments = [
-      { week: 'A', day: 'Lunes', start: '08:00', end: '12:00', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
-      { week: 'A', day: 'Lunes', start: '12:00', end: '19:00', type: 'Teléfono', person: 'Toni', color: '#caffbf' },
-      { week: 'A', day: 'Lunes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Jaume', color: '#a0c4ff' },
-      { week: 'A', day: 'Martes', start: '08:00', end: '13:30', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
-      { week: 'A', day: 'Martes', start: '13:30', end: '19:00', type: 'Teléfono', person: 'Ana Blasco', color: '#bdb2ff' },
-      { week: 'A', day: 'Martes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Gemma', color: '#9bf6ff' },
-      { week: 'A', day: 'Miércoles', start: '08:00', end: '14:30', type: 'Teléfono', person: 'Nerea', color: '#ffc6ff' },
-      { week: 'A', day: 'Miércoles', start: '14:30', end: '19:00', type: 'Teléfono', person: 'Toni', color: '#caffbf' },
-      { week: 'A', day: 'Miércoles', start: '08:15', end: '14:00', type: 'Presencial', person: 'Carme', color: '#fdffb6' },
-      { week: 'A', day: 'Jueves', start: '08:00', end: '12:30', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
-      { week: 'A', day: 'Jueves', start: '12:30', end: '19:00', type: 'Teléfono', person: 'Mar', color: '#a0c4ff' },
-      { week: 'A', day: 'Jueves', start: '08:15', end: '14:00', type: 'Presencial', person: 'A. Belén', color: '#bdb2ff' },
-      { week: 'A', day: 'Viernes', start: '08:00', end: '13:00', type: 'Teléfono', person: 'Nerea', color: '#ffc6ff' },
-      { week: 'A', day: 'Viernes', start: '13:00', end: '19:00', type: 'Teléfono', person: 'Toni', color: '#caffbf' },
-      { week: 'A', day: 'Viernes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Ana Blasco', color: '#bdb2ff' },
-      { week: 'B', day: 'Lunes', start: '08:00', end: '13:00', type: 'Teléfono', person: 'Nerea', color: '#ffc6ff' },
-      { week: 'B', day: 'Lunes', start: '13:00', end: '19:00', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
-      { week: 'B', day: 'Lunes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Gemma', color: '#9bf6ff' },
-      { week: 'B', day: 'Martes', start: '08:00', end: '12:00', type: 'Teléfono', person: 'Toni', color: '#caffbf' },
-      { week: 'B', day: 'Martes', start: '12:00', end: '19:00', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
-      { week: 'B', day: 'Martes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Carme', color: '#fdffb6' },
-      { week: 'B', day: 'Miércoles', start: '08:00', end: '14:30', type: 'Teléfono', person: 'Mar', color: '#a0c4ff' },
-      { week: 'B', day: 'Miércoles', start: '14:30', end: '19:00', type: 'Teléfono', person: 'Ana Blasco', color: '#bdb2ff' },
-      { week: 'B', day: 'Miércoles', start: '08:15', end: '14:00', type: 'Presencial', person: 'Jaume', color: '#a0c4ff' },
-      { week: 'B', day: 'Jueves', start: '08:00', end: '13:30', type: 'Teléfono', person: 'Nerea', color: '#ffc6ff' },
-      { week: 'B', day: 'Jueves', start: '13:30', end: '19:00', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
-      { week: 'B', day: 'Jueves', start: '08:15', end: '14:00', type: 'Presencial', person: 'A. Belén', color: '#bdb2ff' },
-      { week: 'B', day: 'Viernes', start: '08:00', end: '12:30', type: 'Teléfono', person: 'Toni', color: '#caffbf' },
-      { week: 'B', day: 'Viernes', start: '12:30', end: '19:00', type: 'Teléfono', person: 'Nerea', color: '#ffc6ff' },
-      { week: 'B', day: 'Viernes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Mar', color: '#a0c4ff' }
+      { week: 'A', day: 'Lunes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'Jaume', color: '#a0c4ff' },
+      { week: 'A', day: 'Lunes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'Gemma', color: '#9bf6ff' },
+      { week: 'A', day: 'Lunes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'Carme', color: '#fdffb6' },
+      { week: 'A', day: 'Lunes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'A. Belén', color: '#bdb2ff' },
+      { week: 'A', day: 'Lunes', sector: 'Teléfono', shift: 'Completo', schedule: '08:00-19:00', person: 'Mari', color: '#ffd6a5' },
+      { week: 'A', day: 'Lunes', sector: 'Teléfono', shift: 'Completo', schedule: '08:00-19:00', person: 'Toni', color: '#caffbf' },
+      { week: 'A', day: 'Lunes', sector: 'Teléfono', shift: 'Completo', schedule: '08:00-19:00', person: 'Nerea', color: '#ffc6ff' },
+      { week: 'A', day: 'Lunes', sector: 'Back office', shift: 'Mañana', schedule: '09:00-14:00', person: 'Mar', color: '#a0c4ff' },
+      { week: 'A', day: 'Lunes', sector: 'Back office', shift: 'Mañana', schedule: '09:00-14:00', person: 'Ana Blasco', color: '#bdb2ff' },
+      { week: 'A', day: 'Martes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'Gemma', color: '#9bf6ff' },
+      { week: 'A', day: 'Martes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'Jaume', color: '#a0c4ff' },
+      { week: 'A', day: 'Martes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'Carme', color: '#fdffb6' },
+      { week: 'A', day: 'Martes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'A. Belén', color: '#bdb2ff' },
+      { week: 'A', day: 'Martes', sector: 'Teléfono', shift: 'Completo', schedule: '08:00-19:00', person: 'Mari', color: '#ffd6a5' },
+      { week: 'A', day: 'Martes', sector: 'Teléfono', shift: 'Completo', schedule: '08:00-19:00', person: 'Toni', color: '#caffbf' },
+      { week: 'A', day: 'Martes', sector: 'Teléfono', shift: 'Completo', schedule: '08:00-19:00', person: 'Nerea', color: '#ffc6ff' },
+      { week: 'A', day: 'Martes', sector: 'Back office', shift: 'Mañana', schedule: '09:00-14:00', person: 'Mar', color: '#a0c4ff' },
+      { week: 'A', day: 'Martes', sector: 'Back office', shift: 'Mañana', schedule: '09:00-14:00', person: 'Ana Blasco', color: '#bdb2ff' },
+      { week: 'B', day: 'Lunes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'Carme', color: '#fdffb6' },
+      { week: 'B', day: 'Lunes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'A. Belén', color: '#bdb2ff' },
+      { week: 'B', day: 'Lunes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'Gemma', color: '#9bf6ff' },
+      { week: 'B', day: 'Lunes', sector: 'Presencial', shift: 'Mañana', schedule: '08:15-14:00', person: 'Jaume', color: '#a0c4ff' },
+      { week: 'B', day: 'Lunes', sector: 'Teléfono', shift: 'Completo', schedule: '08:00-19:00', person: 'Mari', color: '#ffd6a5' },
+      { week: 'B', day: 'Lunes', sector: 'Teléfono', shift: 'Completo', schedule: '08:00-19:00', person: 'Toni', color: '#caffbf' },
+      { week: 'B', day: 'Lunes', sector: 'Teléfono', shift: 'Completo', schedule: '08:00-19:00', person: 'Nerea', color: '#ffc6ff' },
+      { week: 'B', day: 'Lunes', sector: 'Back office', shift: 'Mañana', schedule: '09:00-14:00', person: 'Mar', color: '#a0c4ff' },
+      { week: 'B', day: 'Lunes', sector: 'Back office', shift: 'Mañana', schedule: '09:00-14:00', person: 'Ana Blasco', color: '#bdb2ff' }
     ];
-
-    function buildTimes() {
-      var times = [];
-      var startMinutes = 8 * 60;
-      var endMinutes = 19 * 60;
-      for (var minutes = startMinutes; minutes <= endMinutes; minutes += 15) {
-        var h = Math.floor(minutes / 60);
-        var m = (minutes % 60).toString().padStart(2, '0');
-        times.push(h.toString().padStart(2, '0') + ':' + m);
-      }
-      return times;
-    }
-
-    var times = buildTimes();
 
     function populatePeople() {
       var select = document.getElementById('person-select');
@@ -232,26 +228,6 @@
       });
     }
 
-    function populateTimes() {
-      var startSelect = document.getElementById('start-time');
-      var endSelect = document.getElementById('end-time');
-      startSelect.innerHTML = '';
-      endSelect.innerHTML = '';
-      times.forEach(function (time) {
-        var optStart = document.createElement('option');
-        optStart.value = time;
-        optStart.textContent = time;
-        startSelect.appendChild(optStart);
-
-        var optEnd = document.createElement('option');
-        optEnd.value = time;
-        optEnd.textContent = time;
-        endSelect.appendChild(optEnd);
-      });
-      startSelect.value = '08:00';
-      endSelect.value = '14:00';
-    }
-
     function renderWeek(weekKey) {
       var container = document.querySelector('[data-week-table="' + weekKey + '"]');
       if (!container) { return; }
@@ -260,42 +236,45 @@
 
       var thead = document.createElement('thead');
       var headRow = document.createElement('tr');
-      var timeHead = document.createElement('th');
-      timeHead.textContent = 'Hora';
-      headRow.appendChild(timeHead);
-      days.forEach(function (day) {
+      var dayHead = document.createElement('th');
+      dayHead.textContent = 'Día';
+      headRow.appendChild(dayHead);
+      sectors.forEach(function (sector) {
         var th = document.createElement('th');
-        th.textContent = day;
+        th.textContent = sector.label;
         headRow.appendChild(th);
       });
       thead.appendChild(headRow);
       table.appendChild(thead);
 
       var tbody = document.createElement('tbody');
-      times.forEach(function (time) {
+      days.forEach(function (day) {
         var row = document.createElement('tr');
-        var timeCell = document.createElement('td');
-        timeCell.className = 'time-cell';
-        timeCell.textContent = time;
-        row.appendChild(timeCell);
+        var dayCell = document.createElement('td');
+        dayCell.className = 'day-cell';
+        dayCell.textContent = day;
+        row.appendChild(dayCell);
 
-        days.forEach(function (day) {
+        sectors.forEach(function (sector) {
           var cell = document.createElement('td');
           var slot = document.createElement('div');
           slot.className = 'slot';
           var matches = assignments.filter(function (assignment) {
             return assignment.week === weekKey &&
               assignment.day === day &&
-              assignment.start <= time &&
-              assignment.end > time;
+              assignment.sector === sector.key;
           });
           matches.forEach(function (assignment) {
             var pill = document.createElement('div');
+            var meta = assignment.shift;
+            if (assignment.schedule) {
+              meta += ' · ' + assignment.schedule;
+            }
             pill.className = 'assignment';
             pill.style.background = assignment.color;
             pill.innerHTML =
               '<div>' + assignment.person + '</div>' +
-              '<span>' + assignment.type + '</span>';
+              '<span>' + meta + '</span>';
             slot.appendChild(pill);
           });
           cell.appendChild(slot);
@@ -318,16 +297,13 @@
       form.addEventListener('submit', function (event) {
         event.preventDefault();
         var data = new FormData(form);
-        var start = data.get('start');
-        var end = data.get('end');
-        if (start >= end) { return; }
         assignments.push({
           week: data.get('week'),
           day: data.get('day'),
           person: data.get('person'),
-          type: data.get('type'),
-          start: start,
-          end: end,
+          sector: data.get('sector'),
+          shift: data.get('shift'),
+          schedule: data.get('schedule'),
           color: data.get('color') || '#7bdff2'
         });
         renderAll();
@@ -335,7 +311,6 @@
     }
 
     populatePeople();
-    populateTimes();
     renderAll();
   })();
 </script>
