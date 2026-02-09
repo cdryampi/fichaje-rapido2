@@ -124,6 +124,11 @@
     width: 120px;
     font-weight: 600;
   }
+  .sector-cell {
+    background: #fafafa;
+    width: 150px;
+    font-weight: 600;
+  }
   .slot {
     display: flex;
     flex-direction: column;
@@ -236,26 +241,27 @@
 
       var thead = document.createElement('thead');
       var headRow = document.createElement('tr');
-      var dayHead = document.createElement('th');
-      dayHead.textContent = 'Día';
-      headRow.appendChild(dayHead);
-      sectors.forEach(function (sector) {
+      var sectorHead = document.createElement('th');
+      sectorHead.textContent = 'Sector';
+      headRow.appendChild(sectorHead);
+      days.forEach(function (day) {
         var th = document.createElement('th');
-        th.textContent = sector.label;
+        th.textContent = day;
+        th.className = 'day-cell';
         headRow.appendChild(th);
       });
       thead.appendChild(headRow);
       table.appendChild(thead);
 
       var tbody = document.createElement('tbody');
-      days.forEach(function (day) {
+      sectors.forEach(function (sector) {
         var row = document.createElement('tr');
-        var dayCell = document.createElement('td');
-        dayCell.className = 'day-cell';
-        dayCell.textContent = day;
-        row.appendChild(dayCell);
+        var sectorCell = document.createElement('td');
+        sectorCell.className = 'sector-cell';
+        sectorCell.textContent = sector.label;
+        row.appendChild(sectorCell);
 
-        sectors.forEach(function (sector) {
+        days.forEach(function (day) {
           var cell = document.createElement('td');
           var slot = document.createElement('div');
           slot.className = 'slot';
