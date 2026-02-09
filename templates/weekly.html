@@ -96,6 +96,40 @@
   <div class="people-grid" id="people-list"></div>
 </div>
 
+<dialog id="assignment-editor">
+  <form method="dialog" id="assignment-editor-form" class="assignment-editor">
+    <div class="assignment-editor__header">
+      <h4>Editar bolita</h4>
+      <button type="button" class="icon-button" data-action="close-editor" aria-label="Cerrar">✕</button>
+    </div>
+    <label>
+      <span class="muted">Persona</span>
+      <select name="person" required></select>
+    </label>
+    <label>
+      <span class="muted">Turno</span>
+      <select name="shift" required>
+        <option value="Mañana">Mañana</option>
+        <option value="Tarde">Tarde</option>
+        <option value="Noche">Noche</option>
+        <option value="Completo">Completo</option>
+      </select>
+    </label>
+    <label>
+      <span class="muted">Horario (opcional)</span>
+      <input type="text" name="schedule" placeholder="08:00-14:00">
+    </label>
+    <label>
+      <span class="muted">Color</span>
+      <input type="color" name="color">
+    </label>
+    <div class="assignment-editor__actions">
+      <button type="button" class="btn" data-action="close-editor">Cancelar</button>
+      <button type="submit" class="btn btn-green">Guardar cambios</button>
+    </div>
+  </form>
+</dialog>
+
 <style>
   .excel-wrap {
     overflow-x: auto;
@@ -135,6 +169,11 @@
     gap: 4px;
     min-height: 34px;
   }
+  .slot.drag-over {
+    background: #eef6ff;
+    outline: 2px dashed #7bb6ff;
+    outline-offset: -4px;
+  }
   .assignment {
     display: flex;
     justify-content: space-between;
@@ -144,10 +183,33 @@
     color: #1a1a1a;
     font-weight: 600;
     font-size: 11px;
+    cursor: grab;
+    align-items: center;
   }
   .assignment span {
     font-weight: 500;
     font-size: 10px;
+  }
+  .assignment__info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .assignment__actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .icon-button {
+    border: none;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .icon-button:hover {
+    background: rgba(255, 255, 255, 0.9);
   }
   .people-grid {
     display: grid;
@@ -161,6 +223,21 @@
   }
   .person-card .muted {
     font-size: 12px;
+  }
+  .assignment-editor {
+    display: grid;
+    gap: 12px;
+    min-width: min(90vw, 360px);
+  }
+  .assignment-editor__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .assignment-editor__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
   }
 </style>
 
@@ -212,17 +289,36 @@
       { week: 'B', day: 'Lunes', sector: 'Back office', shift: 'Mañana', schedule: '09:00-14:00', person: 'Mar', color: '#a0c4ff' },
       { week: 'B', day: 'Lunes', sector: 'Back office', shift: 'Mañana', schedule: '09:00-14:00', person: 'Ana Blasco', color: '#bdb2ff' }
     ];
+    var assignmentId = 1;
+    assignments = assignments.map(function (assignment) {
+      return Object.assign({ id: assignmentId++ }, assignment);
+    });
+
+    var editorDialog = document.getElementById('assignment-editor');
+    var editorForm = document.getElementById('assignment-editor-form');
+    var editingAssignment = null;
 
     function populatePeople() {
       var select = document.getElementById('person-select');
       var list = document.getElementById('people-list');
+      var editorSelect = editorForm ? editorForm.querySelector('select[name="person"]') : null;
       select.innerHTML = '';
       list.innerHTML = '';
+      if (editorSelect) {
+        editorSelect.innerHTML = '';
+      }
       people.forEach(function (person) {
         var option = document.createElement('option');
         option.value = person.name;
         option.textContent = person.name;
         select.appendChild(option);
+
+        if (editorSelect) {
+          var editorOption = document.createElement('option');
+          editorOption.value = person.name;
+          editorOption.textContent = person.name;
+          editorSelect.appendChild(editorOption);
+        }
 
         var card = document.createElement('div');
         card.className = 'person-card';
@@ -231,6 +327,33 @@
           '<div class="muted">' + person.role + '</div>';
         list.appendChild(card);
       });
+    }
+
+    function handleDragStart(event, assignment) {
+      event.dataTransfer.setData('text/plain', assignment.id);
+      event.dataTransfer.effectAllowed = 'move';
+    }
+
+    function handleDrop(event) {
+      event.preventDefault();
+      var id = parseInt(event.dataTransfer.getData('text/plain'), 10);
+      var assignment = assignments.find(function (item) { return item.id === id; });
+      if (!assignment) { return; }
+      var slot = event.currentTarget;
+      assignment.week = slot.dataset.week;
+      assignment.day = slot.dataset.day;
+      assignment.sector = slot.dataset.sector;
+      renderAll();
+    }
+
+    function openEditor(assignment) {
+      if (!editorDialog || !editorForm) { return; }
+      editingAssignment = assignment;
+      editorForm.person.value = assignment.person;
+      editorForm.shift.value = assignment.shift;
+      editorForm.schedule.value = assignment.schedule || '';
+      editorForm.color.value = assignment.color || '#7bdff2';
+      editorDialog.showModal();
     }
 
     function renderWeek(weekKey) {
@@ -265,6 +388,20 @@
           var cell = document.createElement('td');
           var slot = document.createElement('div');
           slot.className = 'slot';
+          slot.dataset.week = weekKey;
+          slot.dataset.day = day;
+          slot.dataset.sector = sector.key;
+          slot.addEventListener('dragover', function (event) {
+            event.preventDefault();
+            event.currentTarget.classList.add('drag-over');
+          });
+          slot.addEventListener('dragleave', function (event) {
+            event.currentTarget.classList.remove('drag-over');
+          });
+          slot.addEventListener('drop', function (event) {
+            event.currentTarget.classList.remove('drag-over');
+            handleDrop(event);
+          });
           var matches = assignments.filter(function (assignment) {
             return assignment.week === weekKey &&
               assignment.day === day &&
@@ -278,9 +415,28 @@
             }
             pill.className = 'assignment';
             pill.style.background = assignment.color;
+            pill.setAttribute('draggable', 'true');
+            pill.addEventListener('dragstart', function (event) {
+              handleDragStart(event, assignment);
+            });
             pill.innerHTML =
-              '<div>' + assignment.person + '</div>' +
-              '<span>' + meta + '</span>';
+              '<div class="assignment__info">' +
+                '<div>' + assignment.person + '</div>' +
+                '<span>' + meta + '</span>' +
+              '</div>' +
+              '<div class="assignment__actions">' +
+                '<button type="button" class="icon-button" data-action="edit" aria-label="Editar">✎</button>' +
+                '<button type="button" class="icon-button" data-action="delete" aria-label="Eliminar">🗑</button>' +
+              '</div>';
+            pill.querySelector('[data-action="edit"]').addEventListener('click', function (event) {
+              event.stopPropagation();
+              openEditor(assignment);
+            });
+            pill.querySelector('[data-action="delete"]').addEventListener('click', function (event) {
+              event.stopPropagation();
+              assignments = assignments.filter(function (item) { return item.id !== assignment.id; });
+              renderAll();
+            });
             slot.appendChild(pill);
           });
           cell.appendChild(slot);
@@ -304,6 +460,7 @@
         event.preventDefault();
         var data = new FormData(form);
         assignments.push({
+          id: assignmentId++,
           week: data.get('week'),
           day: data.get('day'),
           person: data.get('person'),
@@ -313,6 +470,32 @@
           color: data.get('color') || '#7bdff2'
         });
         renderAll();
+      });
+    }
+
+    if (editorDialog && editorForm) {
+      editorForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!editingAssignment) { return; }
+        editingAssignment.person = editorForm.person.value;
+        editingAssignment.shift = editorForm.shift.value;
+        editingAssignment.schedule = editorForm.schedule.value;
+        editingAssignment.color = editorForm.color.value || '#7bdff2';
+        editorDialog.close();
+        editingAssignment = null;
+        renderAll();
+      });
+
+      editorDialog.addEventListener('click', function (event) {
+        var target = event.target;
+        if (target.dataset.action === 'close-editor') {
+          editorDialog.close();
+          editingAssignment = null;
+        }
+        if (target === editorDialog) {
+          editorDialog.close();
+          editingAssignment = null;
+        }
       });
     }
 
