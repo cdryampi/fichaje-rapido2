@@ -1,152 +1,342 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card">
-  <h2>Horario</h2>
-  <p class="muted">Organiza el cuadrante de lunes a viernes y asigna personas con un color.</p>
-
-  <div style="overflow-x:auto;">
-    <table style="width:100%; border-collapse: collapse; min-width: 720px;">
-      <thead>
-        <tr>
-          <th style="text-align:left; border-bottom:1px solid #ddd; padding:10px;">Lunes</th>
-          <th style="text-align:left; border-bottom:1px solid #ddd; padding:10px;">Martes</th>
-          <th style="text-align:left; border-bottom:1px solid #ddd; padding:10px;">Miércoles</th>
-          <th style="text-align:left; border-bottom:1px solid #ddd; padding:10px;">Jueves</th>
-          <th style="text-align:left; border-bottom:1px solid #ddd; padding:10px;">Viernes</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          {% for day in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'] %}
-          <td style="padding:12px; border-bottom:1px solid #f0f0f0; vertical-align:top;">
-            <div style="display:flex; flex-direction:column; gap:8px;" data-schedule-cell>
-              <label class="muted" style="font-size:12px;">Asignación {{ day }}</label>
-              <select data-person-select>
-                <option value="">Selecciona persona</option>
-              </select>
-              <div class="inline">
-                <input type="color" value="#8ecae6" aria-label="Color {{ day }}" data-color-input>
-                <span class="muted" style="font-size:12px;">Color</span>
-              </div>
-              <div data-schedule-badge
-                style="padding:8px 10px; border-radius:8px; border:1px dashed #ccc; font-weight:600; color:#666;">
-                Sin asignar
-              </div>
-            </div>
-          </td>
-          {% endfor %}
-        </tr>
-      </tbody>
-    </table>
+  <div class="header">
+    <div>
+      <h2>Horario de atención (empresa 9 personas)</h2>
+      <p class="muted">
+        Cuadrante visual tipo Excel con semanas A y B. Cobertura presencial de 08:15 a 14:00 y teléfono de 08:00 a 19:00.
+      </p>
+    </div>
+    <div style="text-align:right;">
+      <div class="muted" style="font-size:12px;">Cobertura requerida</div>
+      <div style="font-weight:600;">Presencial 08:15–14:00</div>
+      <div style="font-weight:600;">Teléfono 08:00–19:00</div>
+    </div>
   </div>
 </div>
 
 <div class="card" style="margin-top:16px;">
-  <div class="header">
-    <h3>Personas</h3>
-    <div class="muted">Total: <strong data-people-count>0</strong></div>
-  </div>
-  <p class="muted">Añade personas para que aparezcan en el selector del horario.</p>
-  <form id="people-form">
-    <input type="text" name="name" placeholder="Nombre" required>
-    <input type="text" name="shift" placeholder="Horario que hace (ej. 08:00-16:00)" required>
-    <textarea name="comments" rows="3" placeholder="Comentarios"></textarea>
-    <button type="submit" class="btn btn-green">Añadir persona</button>
+  <h3>Crear asignación</h3>
+  <p class="muted">Añade personas al calendario para que aparezcan en el cuadrante visual.</p>
+  <form id="assignment-form" style="display:grid; gap:12px; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); align-items:end;">
+    <label>
+      <span class="muted">Semana</span>
+      <select name="week" required>
+        <option value="A">Semana A</option>
+        <option value="B">Semana B</option>
+      </select>
+    </label>
+    <label>
+      <span class="muted">Día</span>
+      <select name="day" required>
+        <option value="Lunes">Lunes</option>
+        <option value="Martes">Martes</option>
+        <option value="Miércoles">Miércoles</option>
+        <option value="Jueves">Jueves</option>
+        <option value="Viernes">Viernes</option>
+      </select>
+    </label>
+    <label>
+      <span class="muted">Persona</span>
+      <select name="person" id="person-select" required></select>
+    </label>
+    <label>
+      <span class="muted">Tipo</span>
+      <select name="type" required>
+        <option value="Presencial">Presencial</option>
+        <option value="Teléfono">Teléfono</option>
+      </select>
+    </label>
+    <label>
+      <span class="muted">Inicio</span>
+      <select name="start" id="start-time" required></select>
+    </label>
+    <label>
+      <span class="muted">Fin</span>
+      <select name="end" id="end-time" required></select>
+    </label>
+    <label>
+      <span class="muted">Color</span>
+      <input type="color" name="color" value="#7bdff2">
+    </label>
+    <button type="submit" class="btn btn-green">Añadir al calendario</button>
   </form>
-
-  <div style="margin-top:16px;">
-    <div class="section-title">Listado</div>
-    <div data-people-list style="display:flex; flex-direction:column; gap:8px;"></div>
-  </div>
 </div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="header">
+    <h3>Semana A</h3>
+    <div class="muted">9 trabajadores · cobertura visual</div>
+  </div>
+  <div class="excel-wrap" data-week-table="A"></div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="header">
+    <h3>Semana B</h3>
+    <div class="muted">Rotación para equilibrar turnos</div>
+  </div>
+  <div class="excel-wrap" data-week-table="B"></div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="header">
+    <h3>Equipo (9 personas)</h3>
+    <div class="muted">Actualiza los nombres si el equipo cambia</div>
+  </div>
+  <div class="people-grid" id="people-list"></div>
+</div>
+
+<style>
+  .excel-wrap {
+    overflow-x: auto;
+    border: 1px solid #eee;
+    border-radius: 12px;
+  }
+  .excel-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 920px;
+    font-size: 12px;
+  }
+  .excel-table th,
+  .excel-table td {
+    border: 1px solid #e6e6e6;
+    padding: 6px;
+    vertical-align: top;
+  }
+  .excel-table th {
+    background: #f8f8f8;
+    text-align: left;
+    font-weight: 600;
+  }
+  .time-cell {
+    background: #fafafa;
+    width: 90px;
+    font-weight: 600;
+  }
+  .slot {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 34px;
+  }
+  .assignment {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 3px 6px;
+    border-radius: 8px;
+    color: #1a1a1a;
+    font-weight: 600;
+    font-size: 11px;
+  }
+  .assignment span {
+    font-weight: 500;
+    font-size: 10px;
+  }
+  .people-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+  .person-card {
+    border: 1px solid #eee;
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .person-card .muted {
+    font-size: 12px;
+  }
+</style>
 
 <script>
   (function () {
-    var people = [];
-    var form = document.getElementById('people-form');
-    var list = document.querySelector('[data-people-list]');
-    var count = document.querySelector('[data-people-count]');
-    var selects = document.querySelectorAll('[data-person-select]');
+    var days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+    var people = [
+      { name: 'Jaume', role: 'Responsable presencial' },
+      { name: 'Mari', role: 'Teléfono principal' },
+      { name: 'Nerea', role: 'Apoyo administrativo' },
+      { name: 'Gemma', role: 'Recepción' },
+      { name: 'Carme', role: 'Coordinación' },
+      { name: 'Mar', role: 'Back office' },
+      { name: 'A. Belén', role: 'Atención al cliente' },
+      { name: 'Toni', role: 'Logística' },
+      { name: 'Ana Blasco', role: 'Refuerzo' }
+    ];
+    var assignments = [
+      { week: 'A', day: 'Lunes', start: '08:00', end: '12:00', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
+      { week: 'A', day: 'Lunes', start: '12:00', end: '19:00', type: 'Teléfono', person: 'Toni', color: '#caffbf' },
+      { week: 'A', day: 'Lunes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Jaume', color: '#a0c4ff' },
+      { week: 'A', day: 'Martes', start: '08:00', end: '13:30', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
+      { week: 'A', day: 'Martes', start: '13:30', end: '19:00', type: 'Teléfono', person: 'Ana Blasco', color: '#bdb2ff' },
+      { week: 'A', day: 'Martes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Gemma', color: '#9bf6ff' },
+      { week: 'A', day: 'Miércoles', start: '08:00', end: '14:30', type: 'Teléfono', person: 'Nerea', color: '#ffc6ff' },
+      { week: 'A', day: 'Miércoles', start: '14:30', end: '19:00', type: 'Teléfono', person: 'Toni', color: '#caffbf' },
+      { week: 'A', day: 'Miércoles', start: '08:15', end: '14:00', type: 'Presencial', person: 'Carme', color: '#fdffb6' },
+      { week: 'A', day: 'Jueves', start: '08:00', end: '12:30', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
+      { week: 'A', day: 'Jueves', start: '12:30', end: '19:00', type: 'Teléfono', person: 'Mar', color: '#a0c4ff' },
+      { week: 'A', day: 'Jueves', start: '08:15', end: '14:00', type: 'Presencial', person: 'A. Belén', color: '#bdb2ff' },
+      { week: 'A', day: 'Viernes', start: '08:00', end: '13:00', type: 'Teléfono', person: 'Nerea', color: '#ffc6ff' },
+      { week: 'A', day: 'Viernes', start: '13:00', end: '19:00', type: 'Teléfono', person: 'Toni', color: '#caffbf' },
+      { week: 'A', day: 'Viernes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Ana Blasco', color: '#bdb2ff' },
+      { week: 'B', day: 'Lunes', start: '08:00', end: '13:00', type: 'Teléfono', person: 'Nerea', color: '#ffc6ff' },
+      { week: 'B', day: 'Lunes', start: '13:00', end: '19:00', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
+      { week: 'B', day: 'Lunes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Gemma', color: '#9bf6ff' },
+      { week: 'B', day: 'Martes', start: '08:00', end: '12:00', type: 'Teléfono', person: 'Toni', color: '#caffbf' },
+      { week: 'B', day: 'Martes', start: '12:00', end: '19:00', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
+      { week: 'B', day: 'Martes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Carme', color: '#fdffb6' },
+      { week: 'B', day: 'Miércoles', start: '08:00', end: '14:30', type: 'Teléfono', person: 'Mar', color: '#a0c4ff' },
+      { week: 'B', day: 'Miércoles', start: '14:30', end: '19:00', type: 'Teléfono', person: 'Ana Blasco', color: '#bdb2ff' },
+      { week: 'B', day: 'Miércoles', start: '08:15', end: '14:00', type: 'Presencial', person: 'Jaume', color: '#a0c4ff' },
+      { week: 'B', day: 'Jueves', start: '08:00', end: '13:30', type: 'Teléfono', person: 'Nerea', color: '#ffc6ff' },
+      { week: 'B', day: 'Jueves', start: '13:30', end: '19:00', type: 'Teléfono', person: 'Mari', color: '#ffd6a5' },
+      { week: 'B', day: 'Jueves', start: '08:15', end: '14:00', type: 'Presencial', person: 'A. Belén', color: '#bdb2ff' },
+      { week: 'B', day: 'Viernes', start: '08:00', end: '12:30', type: 'Teléfono', person: 'Toni', color: '#caffbf' },
+      { week: 'B', day: 'Viernes', start: '12:30', end: '19:00', type: 'Teléfono', person: 'Nerea', color: '#ffc6ff' },
+      { week: 'B', day: 'Viernes', start: '08:15', end: '14:00', type: 'Presencial', person: 'Mar', color: '#a0c4ff' }
+    ];
 
-    function renderPeople() {
-      list.innerHTML = '';
-      count.textContent = people.length.toString();
-      people.forEach(function (person) {
-        var item = document.createElement('div');
-        item.style.border = '1px solid #eee';
-        item.style.borderRadius = '10px';
-        item.style.padding = '10px 12px';
-        item.innerHTML =
-          '<strong>' + person.name + '</strong>' +
-          '<div class="muted">Horario: ' + person.shift + '</div>' +
-          (person.comments ? '<div class="muted">Comentarios: ' + person.comments + '</div>' : '');
-        list.appendChild(item);
-      });
-      updateSelectOptions();
-    }
-
-    function updateSelectOptions() {
-      selects.forEach(function (select) {
-        var current = select.value;
-        select.innerHTML = '<option value="">Selecciona persona</option>';
-        people.forEach(function (person) {
-          var opt = document.createElement('option');
-          opt.value = person.name;
-          opt.textContent = person.name;
-          select.appendChild(opt);
-        });
-        if (current) {
-          select.value = current;
-        }
-        updateBadge(select.closest('[data-schedule-cell]'));
-      });
-    }
-
-    function updateBadge(cell) {
-      if (!cell) { return; }
-      var select = cell.querySelector('[data-person-select]');
-      var color = cell.querySelector('[data-color-input]');
-      var badge = cell.querySelector('[data-schedule-badge]');
-      if (!select || !color || !badge) { return; }
-      if (!select.value) {
-        badge.textContent = 'Sin asignar';
-        badge.style.background = 'transparent';
-        badge.style.color = '#666';
-        badge.style.border = '1px dashed #ccc';
-      } else {
-        badge.textContent = select.value;
-        badge.style.background = color.value;
-        badge.style.color = '#111';
-        badge.style.border = '1px solid transparent';
+    function buildTimes() {
+      var times = [];
+      var startMinutes = 8 * 60;
+      var endMinutes = 19 * 60;
+      for (var minutes = startMinutes; minutes <= endMinutes; minutes += 15) {
+        var h = Math.floor(minutes / 60);
+        var m = (minutes % 60).toString().padStart(2, '0');
+        times.push(h.toString().padStart(2, '0') + ':' + m);
       }
+      return times;
     }
 
+    var times = buildTimes();
+
+    function populatePeople() {
+      var select = document.getElementById('person-select');
+      var list = document.getElementById('people-list');
+      select.innerHTML = '';
+      list.innerHTML = '';
+      people.forEach(function (person) {
+        var option = document.createElement('option');
+        option.value = person.name;
+        option.textContent = person.name;
+        select.appendChild(option);
+
+        var card = document.createElement('div');
+        card.className = 'person-card';
+        card.innerHTML =
+          '<strong>' + person.name + '</strong>' +
+          '<div class="muted">' + person.role + '</div>';
+        list.appendChild(card);
+      });
+    }
+
+    function populateTimes() {
+      var startSelect = document.getElementById('start-time');
+      var endSelect = document.getElementById('end-time');
+      startSelect.innerHTML = '';
+      endSelect.innerHTML = '';
+      times.forEach(function (time) {
+        var optStart = document.createElement('option');
+        optStart.value = time;
+        optStart.textContent = time;
+        startSelect.appendChild(optStart);
+
+        var optEnd = document.createElement('option');
+        optEnd.value = time;
+        optEnd.textContent = time;
+        endSelect.appendChild(optEnd);
+      });
+      startSelect.value = '08:00';
+      endSelect.value = '14:00';
+    }
+
+    function renderWeek(weekKey) {
+      var container = document.querySelector('[data-week-table="' + weekKey + '"]');
+      if (!container) { return; }
+      var table = document.createElement('table');
+      table.className = 'excel-table';
+
+      var thead = document.createElement('thead');
+      var headRow = document.createElement('tr');
+      var timeHead = document.createElement('th');
+      timeHead.textContent = 'Hora';
+      headRow.appendChild(timeHead);
+      days.forEach(function (day) {
+        var th = document.createElement('th');
+        th.textContent = day;
+        headRow.appendChild(th);
+      });
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      var tbody = document.createElement('tbody');
+      times.forEach(function (time) {
+        var row = document.createElement('tr');
+        var timeCell = document.createElement('td');
+        timeCell.className = 'time-cell';
+        timeCell.textContent = time;
+        row.appendChild(timeCell);
+
+        days.forEach(function (day) {
+          var cell = document.createElement('td');
+          var slot = document.createElement('div');
+          slot.className = 'slot';
+          var matches = assignments.filter(function (assignment) {
+            return assignment.week === weekKey &&
+              assignment.day === day &&
+              assignment.start <= time &&
+              assignment.end > time;
+          });
+          matches.forEach(function (assignment) {
+            var pill = document.createElement('div');
+            pill.className = 'assignment';
+            pill.style.background = assignment.color;
+            pill.innerHTML =
+              '<div>' + assignment.person + '</div>' +
+              '<span>' + assignment.type + '</span>';
+            slot.appendChild(pill);
+          });
+          cell.appendChild(slot);
+          row.appendChild(cell);
+        });
+        tbody.appendChild(row);
+      });
+      table.appendChild(tbody);
+      container.innerHTML = '';
+      container.appendChild(table);
+    }
+
+    function renderAll() {
+      renderWeek('A');
+      renderWeek('B');
+    }
+
+    var form = document.getElementById('assignment-form');
     if (form) {
       form.addEventListener('submit', function (event) {
         event.preventDefault();
-        var formData = new FormData(form);
-        var name = (formData.get('name') || '').toString().trim();
-        var shift = (formData.get('shift') || '').toString().trim();
-        var comments = (formData.get('comments') || '').toString().trim();
-        if (!name || !shift) { return; }
-        people.push({ name: name, shift: shift, comments: comments });
-        form.reset();
-        renderPeople();
+        var data = new FormData(form);
+        var start = data.get('start');
+        var end = data.get('end');
+        if (start >= end) { return; }
+        assignments.push({
+          week: data.get('week'),
+          day: data.get('day'),
+          person: data.get('person'),
+          type: data.get('type'),
+          start: start,
+          end: end,
+          color: data.get('color') || '#7bdff2'
+        });
+        renderAll();
       });
     }
 
-    document.querySelectorAll('[data-schedule-cell]').forEach(function (cell) {
-      var select = cell.querySelector('[data-person-select]');
-      var color = cell.querySelector('[data-color-input]');
-      if (select) {
-        select.addEventListener('change', function () { updateBadge(cell); });
-      }
-      if (color) {
-        color.addEventListener('input', function () { updateBadge(cell); });
-      }
-    });
-
-    renderPeople();
+    populatePeople();
+    populateTimes();
+    renderAll();
   })();
 </script>
 {% endblock %}
